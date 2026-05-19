@@ -205,4 +205,22 @@ module CWE
   def self.catalog_version : String
     catalog.catalog_version
   end
+
+  # ---- External references ----
+
+  # All catalog-level citations (the `<External_References>` block in the
+  # MITRE XML). Empty when the build wasn't given the XML.
+  def self.external_references : Array(ExternalReference)
+    catalog.external_references
+  end
+
+  # Resolve a `REF-N` citation id to its full record. Returns nil if the
+  # id is not in the registry.
+  def self.external_reference(id : String) : ExternalReference?
+    catalog.external_reference(id)
+  end
+
+  def self.external_reference!(id : String) : ExternalReference
+    catalog.external_reference!(id)
+  end
 end

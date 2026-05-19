@@ -20,6 +20,7 @@ module CWE
     getter id : Int32
     getter name : String
     getter abstraction : Abstraction
+    getter structure : Structure
     getter status : Status
     getter description : String?
     getter extended_description : String?
@@ -34,6 +35,7 @@ module CWE
     getter detection_methods : Array(DetectionMethod)
     getter potential_mitigations : Array(Mitigation)
     getter observed_examples : Array(ObservedExample)
+    getter demonstrative_examples : Array(DemonstrativeExample)
     getter taxonomy_mappings : Array(TaxonomyMapping)
     getter related_attack_patterns : Array(Int32)
     getter notes : Array(Note)
@@ -41,18 +43,23 @@ module CWE
     getter functional_areas : Array(String)
     getter affected_resources : Array(String)
     getter exploitation_factors : Array(String)
+    getter references : Array(ReferenceLink)
+    getter mapping_notes : MappingNotes?
+    getter content_history : ContentHistory?
 
     # Raw fields kept for the catalog's internal use; not part of the public
     # surface but exposed for callers that want to introspect the underlying
     # representation.
     getter raw_abstraction : String?
     getter raw_status : String?
+    getter raw_structure : String?
 
     def initialize(
       @id : Int32,
       @name : String,
       @abstraction : Abstraction = Abstraction::Other,
       @status : Status = Status::Other,
+      @structure : Structure = Structure::Simple,
       @description : String? = nil,
       @extended_description : String? = nil,
       @likelihood_of_exploit : String? = nil,
@@ -65,6 +72,7 @@ module CWE
       @detection_methods : Array(DetectionMethod) = [] of DetectionMethod,
       @potential_mitigations : Array(Mitigation) = [] of Mitigation,
       @observed_examples : Array(ObservedExample) = [] of ObservedExample,
+      @demonstrative_examples : Array(DemonstrativeExample) = [] of DemonstrativeExample,
       @taxonomy_mappings : Array(TaxonomyMapping) = [] of TaxonomyMapping,
       @related_attack_patterns : Array(Int32) = [] of Int32,
       @notes : Array(Note) = [] of Note,
@@ -72,8 +80,12 @@ module CWE
       @functional_areas : Array(String) = [] of String,
       @affected_resources : Array(String) = [] of String,
       @exploitation_factors : Array(String) = [] of String,
+      @references : Array(ReferenceLink) = [] of ReferenceLink,
+      @mapping_notes : MappingNotes? = nil,
+      @content_history : ContentHistory? = nil,
       @raw_abstraction : String? = nil,
       @raw_status : String? = nil,
+      @raw_structure : String? = nil,
     )
     end
 
@@ -129,6 +141,35 @@ module CWE
     # True if the catalog marks this entry deprecated.
     def deprecated? : Bool
       @status == Status::Deprecated || @name.starts_with?("DEPRECATED:")
+    end
+
+    # CWE 4.x mapping policy. `MappingUsage::Other` is returned when the
+    # entry has no `<Mapping_Notes>` block (older entries; categories that
+    # predate the policy).
+    def mapping_usage : MappingUsage
+      @mapping_notes.try(&.usage) || MappingUsage::Other
+    end
+
+    # True when MITRE marks this entry as an acceptable mapping target
+    # (`Allowed` or `Allowed-with-Review`).
+    def mappable? : Bool
+      case mapping_usage
+      when .allowed?, .allowed_with_review? then true
+      else                                       false
+      end
+    end
+
+    def chain? : Bool
+      @structure == Structure::Chain
+    end
+
+    def composite? : Bool
+      @structure == Structure::Composite
+    end
+
+    # True for any Compound entry (Chain or Composite).
+    def compound? : Bool
+      chain? || composite?
     end
 
     # Single-line summary suitable for log lines / CLI output:

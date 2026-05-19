@@ -22,6 +22,7 @@ module CWE
         json.field "url", url
         json.field "abstraction", @abstraction.to_s
         json.field "status", @status.to_s
+        json.field "structure", @structure.to_s
 
         if d = @description
           json.field "description", d
@@ -111,6 +112,136 @@ module CWE
         unless @exploitation_factors.empty?
           json.field "exploitationFactors" do
             json.array { @exploitation_factors.each { |s| json.string(s) } }
+          end
+        end
+        unless @demonstrative_examples.empty?
+          json.field "demonstrativeExamples" do
+            json.array { @demonstrative_examples.each(&.to_json(json)) }
+          end
+        end
+        unless @references.empty?
+          json.field "references" do
+            json.array { @references.each(&.to_json(json)) }
+          end
+        end
+        if mn = @mapping_notes
+          json.field "mappingNotes", mn
+        end
+        if ch = @content_history
+          json.field "contentHistory", ch
+        end
+      end
+    end
+  end
+
+  class Category
+    def to_json(json : ::JSON::Builder) : Nil
+      json.object do
+        json.field "id", @id
+        json.field "cweId", cwe_id
+        json.field "name", @name
+        json.field "url", url
+        json.field "status", @status.to_s
+        if s = @summary
+          json.field "summary", s
+        end
+        unless @members.empty?
+          json.field "members" do
+            json.array { @members.each(&.to_json(json)) }
+          end
+        end
+        unless @notes.empty?
+          json.field "notes" do
+            json.array { @notes.each(&.to_json(json)) }
+          end
+        end
+        unless @taxonomy_mappings.empty?
+          json.field "taxonomyMappings" do
+            json.array { @taxonomy_mappings.each(&.to_json(json)) }
+          end
+        end
+        unless @references.empty?
+          json.field "references" do
+            json.array { @references.each(&.to_json(json)) }
+          end
+        end
+        if mn = @mapping_notes
+          json.field "mappingNotes", mn
+        end
+        if ch = @content_history
+          json.field "contentHistory", ch
+        end
+      end
+    end
+  end
+
+  class View
+    def to_json(json : ::JSON::Builder) : Nil
+      json.object do
+        json.field "id", @id
+        json.field "cweId", cwe_id
+        json.field "name", @name
+        json.field "url", url
+        if t = @type
+          json.field "type", t
+        end
+        json.field "status", @status.to_s
+        if o = @objective
+          json.field "objective", o
+        end
+        if f = @filter
+          json.field "filter", f
+        end
+        unless @members.empty?
+          json.field "members" do
+            json.array { @members.each(&.to_json(json)) }
+          end
+        end
+        unless @audience.empty?
+          json.field "audience" do
+            json.array { @audience.each(&.to_json(json)) }
+          end
+        end
+        unless @notes.empty?
+          json.field "notes" do
+            json.array { @notes.each(&.to_json(json)) }
+          end
+        end
+        unless @references.empty?
+          json.field "references" do
+            json.array { @references.each(&.to_json(json)) }
+          end
+        end
+        if mn = @mapping_notes
+          json.field "mappingNotes", mn
+        end
+        if ch = @content_history
+          json.field "contentHistory", ch
+        end
+      end
+    end
+  end
+
+  # MappingNotes serializes its `usage` enum as the human-readable label
+  # rather than the underscored Crystal name.
+  struct MappingNotes
+    def to_json(json : ::JSON::Builder) : Nil
+      json.object do
+        json.field "usage", @usage.to_s
+        if r = @rationale
+          json.field "rationale", r
+        end
+        if c = @comments
+          json.field "comments", c
+        end
+        unless @reasons.empty?
+          json.field "reasons" do
+            json.array { @reasons.each { |r| json.string(r) } }
+          end
+        end
+        unless @suggestions.empty?
+          json.field "suggestions" do
+            json.array { @suggestions.each(&.to_json(json)) }
           end
         end
       end

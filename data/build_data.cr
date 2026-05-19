@@ -341,6 +341,223 @@ if meta_version == "unknown"
   meta_version = File.read(vfile).strip if File.exists?(vfile)
 end
 
+# --- Extract Weakness-level XML-only fields ---------------------------------
+#
+# The CSV omits these blocks entirely; they only exist in the XML. We index
+# them by CWE id and merge them into the JSON output below.
+xml_extras = {} of Int32 => Hash(String, JSON::Any)
+external_refs = [] of Hash(String, JSON::Any)
+# Categories and Views accumulate the same xml-derived blocks (notes,
+# taxonomy_mappings, references, mapping_notes, content_history, audience).
+category_extras = {} of Int32 => Hash(String, JSON::Any)
+view_extras = {} of Int32 => Hash(String, JSON::Any)
+
+# Collapse the xhtml content of a `<xhtml:div>` (used inside Example_Code)
+# into a plain string. `<xhtml:br/>` becomes a newline; other tags are
+# stripped but their text content is preserved.
+def render_xhtml(node : XML::Node) : String
+  io = String::Builder.new
+  walk = uninitialized XML::Node -> Nil
+  walk = ->(n : XML::Node) do
+    n.children.each do |c|
+      if c.element?
+        case c.name
+        when "br"
+          io << '\n'
+        else
+          walk.call(c)
+        end
+      else
+        io << c.content
+      end
+    end
+  end
+  walk.call(node)
+  io.to_s.strip
+end
+
+def child_named(parent : XML::Node, local : String) : XML::Node?
+  parent.children.find { |c| c.element? && c.name == local }
+end
+
+def children_named(parent : XML::Node, local : String) : Array(XML::Node)
+  parent.children.select { |c| c.element? && c.name == local }.map(&.as(XML::Node))
+end
+
+def text_of_child(parent : XML::Node, local : String) : String?
+  if c = child_named(parent, local)
+    s = c.content.strip
+    s.empty? ? nil : s
+  end
+end
+
+# Parses `<Mapping_Notes>` into the JSON shape consumed by Catalog.from_json.
+def parse_mapping_notes(node : XML::Node) : Hash(String, JSON::Any)
+  h = {} of String => JSON::Any
+  usage = text_of_child(node, "Usage")
+  h["usage"] = JSON::Any.new(usage) if usage
+  if r = text_of_child(node, "Rationale")
+    h["rationale"] = JSON::Any.new(r)
+  end
+  if c = text_of_child(node, "Comments")
+    h["comments"] = JSON::Any.new(c)
+  end
+  if reasons_node = child_named(node, "Reasons")
+    rs = [] of JSON::Any
+    children_named(reasons_node, "Reason").each do |r|
+      if t = r["Type"]?
+        rs << JSON::Any.new(t)
+      end
+    end
+    h["reasons"] = JSON::Any.new(rs) unless rs.empty?
+  end
+  if suggestions_node = child_named(node, "Suggestions")
+    ss = [] of JSON::Any
+    children_named(suggestions_node, "Suggestion").each do |s|
+      cid = s["CWE_ID"]?.try(&.to_i64?)
+      next unless cid
+      inner = {} of String => JSON::Any
+      inner["cwe_id"] = JSON::Any.new(cid)
+      if c = s["Comment"]?
+        inner["comment"] = JSON::Any.new(c)
+      end
+      ss << JSON::Any.new(inner)
+    end
+    h["suggestions"] = JSON::Any.new(ss) unless ss.empty?
+  end
+  h
+end
+
+# Parses `<Content_History>` into a compact summary record.
+def parse_content_history(node : XML::Node) : Hash(String, JSON::Any)
+  h = {} of String => JSON::Any
+  if sub = child_named(node, "Submission")
+    if d = text_of_child(sub, "Submission_Date")
+      h["submission_date"] = JSON::Any.new(d)
+    end
+    if n = text_of_child(sub, "Submission_Name")
+      h["submission_name"] = JSON::Any.new(n)
+    end
+    if o = text_of_child(sub, "Submission_Organization")
+      h["submission_organization"] = JSON::Any.new(o)
+    end
+  end
+  mods = children_named(node, "Modification")
+  h["modification_count"] = JSON::Any.new(mods.size.to_i64)
+  if last = mods.last?
+    if d = text_of_child(last, "Modification_Date")
+      h["last_modification_date"] = JSON::Any.new(d)
+    end
+  end
+  h
+end
+
+def parse_references(node : XML::Node) : Array(JSON::Any)
+  arr = [] of JSON::Any
+  children_named(node, "Reference").each do |r|
+    next unless rid = r["External_Reference_ID"]?
+    inner = {} of String => JSON::Any
+    inner["external_reference_id"] = JSON::Any.new(rid)
+    if sec = r["Section"]?
+      inner["section"] = JSON::Any.new(sec)
+    end
+    arr << JSON::Any.new(inner)
+  end
+  arr
+end
+
+def parse_notes(node : XML::Node) : Array(JSON::Any)
+  arr = [] of JSON::Any
+  children_named(node, "Note").each do |n|
+    inner = {} of String => JSON::Any
+    inner["type"] = JSON::Any.new(n["Type"]? || "")
+    text = n.content.strip
+    inner["note"] = JSON::Any.new(text) unless text.empty?
+    arr << JSON::Any.new(inner)
+  end
+  arr
+end
+
+def parse_taxonomy_mappings(node : XML::Node) : Array(JSON::Any)
+  arr = [] of JSON::Any
+  children_named(node, "Taxonomy_Mapping").each do |t|
+    inner = {} of String => JSON::Any
+    inner["taxonomy_name"] = JSON::Any.new(t["Taxonomy_Name"]? || "")
+    if eid = text_of_child(t, "Entry_ID")
+      inner["entry_id"] = JSON::Any.new(eid)
+    end
+    if en = text_of_child(t, "Entry_Name")
+      inner["entry_name"] = JSON::Any.new(en)
+    end
+    if mf = text_of_child(t, "Mapping_Fit")
+      inner["mapping_fit"] = JSON::Any.new(mf)
+    end
+    arr << JSON::Any.new(inner)
+  end
+  arr
+end
+
+def parse_audience(node : XML::Node) : Array(JSON::Any)
+  arr = [] of JSON::Any
+  children_named(node, "Stakeholder").each do |s|
+    inner = {} of String => JSON::Any
+    inner["type"] = JSON::Any.new(text_of_child(s, "Type") || "")
+    if d = text_of_child(s, "Description")
+      inner["description"] = JSON::Any.new(d)
+    end
+    arr << JSON::Any.new(inner)
+  end
+  arr
+end
+
+def parse_demonstrative_examples(node : XML::Node) : Array(JSON::Any)
+  arr = [] of JSON::Any
+  children_named(node, "Demonstrative_Example").each do |de|
+    inner = {} of String => JSON::Any
+    intro = nil
+    bodies = [] of JSON::Any
+    codes = [] of JSON::Any
+    ref_ids = [] of JSON::Any
+
+    de.children.each do |c|
+      next unless c.element?
+      case c.name
+      when "Intro_Text"
+        s = c.content.strip
+        intro = s unless s.empty?
+      when "Body_Text"
+        s = c.content.strip
+        bodies << JSON::Any.new(s) unless s.empty?
+      when "Example_Code"
+        rendered = render_xhtml(c)
+        next if rendered.empty?
+        ch = {} of String => JSON::Any
+        ch["code"] = JSON::Any.new(rendered)
+        if nat = c["Nature"]?
+          ch["nature"] = JSON::Any.new(nat)
+        end
+        if lang = c["Language"]?
+          ch["language"] = JSON::Any.new(lang)
+        end
+        codes << JSON::Any.new(ch)
+      when "References"
+        children_named(c, "Reference").each do |r|
+          if rid = r["External_Reference_ID"]?
+            ref_ids << JSON::Any.new(rid)
+          end
+        end
+      end
+    end
+
+    inner["intro_text"] = JSON::Any.new(intro) if intro
+    inner["body_text"] = JSON::Any.new(bodies) unless bodies.empty?
+    inner["example_code"] = JSON::Any.new(codes) unless codes.empty?
+    inner["reference_ids"] = JSON::Any.new(ref_ids) unless ref_ids.empty?
+    arr << JSON::Any.new(inner) unless inner.empty?
+  end
+  arr
+end
+
 # --- Extract Categories and Views from the XML (optional) -------------------
 #
 # The XML uses the `http://cwe.mitre.org/cwe-7` default namespace. Crystal's
@@ -377,17 +594,83 @@ if xml_path
   doc.root.try &.children.each do |group|
     next unless group.element?
     case group.name
+    when "Weaknesses"
+      group.children.each do |wn|
+        next unless wn.element? && wn.name == "Weakness"
+        id = wn["ID"]?.try(&.to_i?) || next
+
+        extras = {} of String => JSON::Any
+        if struct_attr = wn["Structure"]?
+          extras["structure"] = JSON::Any.new(struct_attr)
+        end
+
+        wn.children.each do |child|
+          next unless child.element?
+          case child.name
+          when "Demonstrative_Examples"
+            des = parse_demonstrative_examples(child)
+            extras["demonstrative_examples"] = JSON::Any.new(des) unless des.empty?
+          when "References"
+            refs = parse_references(child)
+            extras["references"] = JSON::Any.new(refs) unless refs.empty?
+          when "Mapping_Notes"
+            mn = parse_mapping_notes(child)
+            extras["mapping_notes"] = JSON::Any.new(mn) unless mn.empty?
+          when "Content_History"
+            ch = parse_content_history(child)
+            extras["content_history"] = JSON::Any.new(ch) unless ch.empty?
+          end
+        end
+
+        xml_extras[id] = extras unless extras.empty?
+      end
+    when "External_References"
+      group.children.each do |er|
+        next unless er.element? && er.name == "External_Reference"
+        rid = er["Reference_ID"]? || next
+        entry = {} of String => JSON::Any
+        entry["reference_id"] = JSON::Any.new(rid)
+        authors = [] of JSON::Any
+        er.children.each do |c|
+          next unless c.element?
+          case c.name
+          when "Author"           then authors << JSON::Any.new(c.content.strip)
+          when "Title"            then entry["title"] = JSON::Any.new(c.content.strip)
+          when "Edition"          then entry["edition"] = JSON::Any.new(c.content.strip)
+          when "Publication"      then entry["publication"] = JSON::Any.new(c.content.strip)
+          when "Publication_Year" then entry["publication_year"] = JSON::Any.new(c.content.strip)
+          when "Publication_Month"
+            entry["publication_month"] = JSON::Any.new(c.content.strip)
+          when "Publication_Day" then entry["publication_day"] = JSON::Any.new(c.content.strip)
+          when "Publisher"       then entry["publisher"] = JSON::Any.new(c.content.strip)
+          when "URL"             then entry["url"] = JSON::Any.new(c.content.strip)
+          when "URL_Date"        then entry["url_date"] = JSON::Any.new(c.content.strip)
+          end
+        end
+        entry["authors"] = JSON::Any.new(authors) unless authors.empty?
+        external_refs << entry
+      end
     when "Categories"
       group.children.each do |cat|
         next unless cat.element? && cat.name == "Category"
         id = cat["ID"]?.try(&.to_i?) || next
         members = [] of Hash(String, JSON::Any)
         summary = ""
+        notes = [] of JSON::Any
+        taxonomy = [] of JSON::Any
+        references = [] of JSON::Any
+        mapping_notes = {} of String => JSON::Any
+        content_history = {} of String => JSON::Any
         cat.children.each do |child|
           next unless child.element?
           case child.name
-          when "Summary"       then summary = child.content.strip
-          when "Relationships" then members = collect_members.call(child)
+          when "Summary"           then summary = child.content.strip
+          when "Relationships"     then members = collect_members.call(child)
+          when "Notes"             then notes = parse_notes(child)
+          when "Taxonomy_Mappings" then taxonomy = parse_taxonomy_mappings(child)
+          when "References"        then references = parse_references(child)
+          when "Mapping_Notes"     then mapping_notes = parse_mapping_notes(child)
+          when "Content_History"   then content_history = parse_content_history(child)
           end
         end
         entry = {} of String => JSON::Any
@@ -398,6 +681,11 @@ if xml_path
         unless members.empty?
           entry["members"] = JSON::Any.new(members.map { |m| JSON::Any.new(m) })
         end
+        entry["notes"] = JSON::Any.new(notes) unless notes.empty?
+        entry["taxonomy_mappings"] = JSON::Any.new(taxonomy) unless taxonomy.empty?
+        entry["references"] = JSON::Any.new(references) unless references.empty?
+        entry["mapping_notes"] = JSON::Any.new(mapping_notes) unless mapping_notes.empty?
+        entry["content_history"] = JSON::Any.new(content_history) unless content_history.empty?
         categories << entry
       end
     when "Views"
@@ -407,12 +695,22 @@ if xml_path
         members = [] of Hash(String, JSON::Any)
         objective = ""
         filter = ""
+        audience = [] of JSON::Any
+        notes = [] of JSON::Any
+        references = [] of JSON::Any
+        mapping_notes = {} of String => JSON::Any
+        content_history = {} of String => JSON::Any
         view.children.each do |child|
           next unless child.element?
           case child.name
-          when "Objective" then objective = child.content.strip
-          when "Filter"    then filter = child.content.strip
-          when "Members"   then members = collect_members.call(child)
+          when "Objective"       then objective = child.content.strip
+          when "Filter"          then filter = child.content.strip
+          when "Members"         then members = collect_members.call(child)
+          when "Audience"        then audience = parse_audience(child)
+          when "Notes"           then notes = parse_notes(child)
+          when "References"      then references = parse_references(child)
+          when "Mapping_Notes"   then mapping_notes = parse_mapping_notes(child)
+          when "Content_History" then content_history = parse_content_history(child)
           end
         end
         entry = {} of String => JSON::Any
@@ -425,10 +723,22 @@ if xml_path
         unless members.empty?
           entry["members"] = JSON::Any.new(members.map { |m| JSON::Any.new(m) })
         end
+        entry["audience"] = JSON::Any.new(audience) unless audience.empty?
+        entry["notes"] = JSON::Any.new(notes) unless notes.empty?
+        entry["references"] = JSON::Any.new(references) unless references.empty?
+        entry["mapping_notes"] = JSON::Any.new(mapping_notes) unless mapping_notes.empty?
+        entry["content_history"] = JSON::Any.new(content_history) unless content_history.empty?
         views << entry
       end
     end
   end
+end
+
+# Merge the XML-only weakness fields back into the CSV-derived rows.
+weaknesses.each do |w|
+  wid = w["id"].as_i64.to_i32
+  next unless extras = xml_extras[wid]?
+  extras.each { |k, v| w[k] = v }
 end
 
 categories.sort_by! { |h| h["id"].as_i64 }
@@ -440,11 +750,13 @@ top["generated_at"] = JSON::Any.new(Time.utc.to_rfc3339)
 top["weakness_count"] = JSON::Any.new(weaknesses.size.to_i64)
 top["category_count"] = JSON::Any.new(categories.size.to_i64)
 top["view_count"] = JSON::Any.new(views.size.to_i64)
+top["external_reference_count"] = JSON::Any.new(external_refs.size.to_i64)
 top["weaknesses"] = JSON::Any.new(weaknesses.map { |h| JSON::Any.new(h) })
 top["categories"] = JSON::Any.new(categories.map { |h| JSON::Any.new(h) })
 top["views"] = JSON::Any.new(views.map { |h| JSON::Any.new(h) })
+top["external_references"] = JSON::Any.new(external_refs.map { |h| JSON::Any.new(h) })
 
 File.write(OUT_PATH, JSON::Any.new(top).to_json)
 
-puts "wrote #{weaknesses.size} weaknesses, #{categories.size} categories, #{views.size} views to #{OUT_PATH}"
+puts "wrote #{weaknesses.size} weaknesses, #{categories.size} categories, #{views.size} views, #{external_refs.size} refs to #{OUT_PATH}"
 puts "size: #{File.size(OUT_PATH).humanize_bytes}"

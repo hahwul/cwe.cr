@@ -407,6 +407,144 @@ describe CWE do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # CWE 4.x XML-only fields: Demonstrative_Examples, References,
+  # Mapping_Notes, Content_History, Structure, Audience
+  # ---------------------------------------------------------------------------
+
+  describe "Structure attribute" do
+    it "parses Weakness#structure on standard entries" do
+      CWE.find!(79).structure.should eq(CWE::Structure::Simple)
+    end
+
+    it "exposes chain?/composite? predicates" do
+      w = CWE.find!(79)
+      w.chain?.should be_false
+      w.composite?.should be_false
+      w.compound?.should be_false
+    end
+
+    it "marks at least one compound entry across the catalog" do
+      compounds = CWE.all.select(&.compound?)
+      compounds.should_not be_empty
+    end
+  end
+
+  describe "Mapping_Notes" do
+    it "parses Mapping_Notes on a Stable Base weakness" do
+      w = CWE.find!(79)
+      mn = w.mapping_notes
+      mn.should_not be_nil
+      mn.not_nil!.usage.should eq(CWE::MappingUsage::Allowed)
+    end
+
+    it "exposes mapping_usage / mappable? helpers" do
+      CWE.find!(79).mapping_usage.should eq(CWE::MappingUsage::Allowed)
+      CWE.find!(79).mappable?.should be_true
+    end
+
+    it "marks Categories as Prohibited" do
+      cat = CWE.category!(227)
+      cat.mapping_usage.should eq(CWE::MappingUsage::Prohibited)
+      cat.mappable?.should be_false
+    end
+
+    it "marks Views as Prohibited" do
+      v = CWE.view!(1000)
+      v.mapping_usage.should eq(CWE::MappingUsage::Prohibited)
+      v.mappable?.should be_false
+    end
+
+    it "parses Allowed-with-Review / Discouraged usages somewhere in the catalog" do
+      usages = CWE.all.compact_map(&.mapping_notes).map(&.usage).to_set
+      usages.should contain(CWE::MappingUsage::Discouraged)
+    end
+  end
+
+  describe "Demonstrative_Examples" do
+    it "populates intro/body/code on CWE-79" do
+      examples = CWE.find!(79).demonstrative_examples
+      examples.should_not be_empty
+      examples.first.example_code.should_not be_empty
+      examples.first.example_code.first.code.should_not be_empty
+    end
+
+    it "tags example code with language and nature where present" do
+      examples = CWE.find!(89).demonstrative_examples
+      examples.should_not be_empty
+      natures = examples.flat_map(&.example_code).compact_map(&.nature).to_set
+      # SQL injection has both 'Bad' and 'Good' code samples.
+      natures.should contain("Bad")
+    end
+  end
+
+  describe "External_References registry" do
+    it "loads the catalog-level citation list" do
+      CWE.external_references.should_not be_empty
+      CWE.external_references.size.should be > 1000
+    end
+
+    it "resolves REF-* ids referenced by Weakness#references" do
+      w = CWE.find!(79)
+      w.references.should_not be_empty
+      first = w.references.first
+      ref = CWE.external_reference(first.external_reference_id)
+      ref.should_not be_nil
+      ref.not_nil!.reference_id.should eq(first.external_reference_id)
+    end
+
+    it "raises on unknown reference id via the bang variant" do
+      expect_raises(CWE::NotFoundError) { CWE.external_reference!("REF-not-real") }
+    end
+  end
+
+  describe "Content_History" do
+    it "exposes submission_date and modification_count on CWE-79" do
+      ch = CWE.find!(79).content_history
+      ch.should_not be_nil
+      ch.not_nil!.submission_date.should_not be_nil
+      ch.not_nil!.modification_count.should be > 0
+    end
+  end
+
+  describe "View Audience" do
+    it "exposes stakeholders on CWE-1000 (Research Concepts)" do
+      v = CWE.view!(1000)
+      v.audience.should_not be_empty
+      v.audience.first.type.should_not be_empty
+    end
+  end
+
+  describe "Category XML extras" do
+    it "exposes taxonomy_mappings and references on CWE-227" do
+      cat = CWE.category!(227)
+      cat.taxonomy_mappings.should_not be_empty
+      cat.references.should_not be_empty
+    end
+  end
+
+  describe "JSON serialization of new fields" do
+    it "emits structure, mappingNotes, demonstrativeExamples, references" do
+      j = JSON.parse(CWE.find!(79).to_json).as_h
+      j["structure"].as_s.should eq("Simple")
+      j["mappingNotes"].as_h["usage"].as_s.should eq("Allowed")
+      j["demonstrativeExamples"].as_a.should_not be_empty
+      j["references"].as_a.should_not be_empty
+      j["contentHistory"].as_h.has_key?("submissionDate").should be_true
+    end
+
+    it "emits a Category with the new fields" do
+      j = JSON.parse(CWE.category!(227).to_json).as_h
+      j["mappingNotes"].as_h["usage"].as_s.should eq("Prohibited")
+      j["taxonomyMappings"].as_a.should_not be_empty
+    end
+
+    it "emits a View with audience" do
+      j = JSON.parse(CWE.view!(1000).to_json).as_h
+      j["audience"].as_a.should_not be_empty
+    end
+  end
+
   describe "Unified entry lookup" do
     it "returns a Weakness for a weakness id" do
       CWE.entry(79).should be_a(CWE::Weakness)

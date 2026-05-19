@@ -13,10 +13,29 @@ module CWE
     getter status : Status
     getter summary : String?
     getter members : Array(Member)
+    getter notes : Array(Note)
+    getter taxonomy_mappings : Array(TaxonomyMapping)
+    getter references : Array(ReferenceLink)
+    getter mapping_notes : MappingNotes?
+    getter content_history : ContentHistory?
     getter raw_status : String?
 
     def initialize(@id, @name, @status = Status::Other, @summary = nil,
-                   @members = [] of Member, @raw_status = nil)
+                   @members = [] of Member,
+                   @notes = [] of Note,
+                   @taxonomy_mappings = [] of TaxonomyMapping,
+                   @references = [] of ReferenceLink,
+                   @mapping_notes = nil,
+                   @content_history = nil,
+                   @raw_status = nil)
+    end
+
+    def mapping_usage : MappingUsage
+      @mapping_notes.try(&.usage) || MappingUsage::Prohibited
+    end
+
+    def mappable? : Bool
+      false # Categories are always Mapping_Prohibited per MITRE policy.
     end
 
     def cwe_id : String
@@ -81,11 +100,30 @@ module CWE
     getter objective : String?
     getter filter : String?
     getter members : Array(Category::Member)
+    getter audience : Array(Stakeholder)
+    getter notes : Array(Note)
+    getter references : Array(ReferenceLink)
+    getter mapping_notes : MappingNotes?
+    getter content_history : ContentHistory?
     getter raw_status : String?
 
     def initialize(@id, @name, @type = nil, @status = Status::Other,
                    @objective = nil, @filter = nil,
-                   @members = [] of Category::Member, @raw_status = nil)
+                   @members = [] of Category::Member,
+                   @audience = [] of Stakeholder,
+                   @notes = [] of Note,
+                   @references = [] of ReferenceLink,
+                   @mapping_notes = nil,
+                   @content_history = nil,
+                   @raw_status = nil)
+    end
+
+    def mapping_usage : MappingUsage
+      @mapping_notes.try(&.usage) || MappingUsage::Prohibited
+    end
+
+    def mappable? : Bool
+      false # Views are always Mapping_Prohibited per MITRE policy.
     end
 
     def cwe_id : String

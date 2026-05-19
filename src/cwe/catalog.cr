@@ -53,11 +53,14 @@ module CWE
     # at it via a `ChildOf` edge. Built once at construction so `children_of`
     # is O(children) instead of O(catalog).
     @children_index : Hash(Int32, Array(Weakness))
+    @external_refs_by_id : Hash(String, ExternalReference)
+    @sorted_external_refs : Array(ExternalReference)
 
     def initialize(@catalog_version : String, @generated_at : String,
                    weaknesses : Array(Weakness),
                    categories : Array(Category) = [] of Category,
-                   views : Array(View) = [] of View)
+                   views : Array(View) = [] of View,
+                   external_references : Array(ExternalReference) = [] of ExternalReference)
       @by_id = {} of Int32 => Weakness
       weaknesses.each { |w| @by_id[w.id] = w }
       @sorted = weaknesses.sort
@@ -69,6 +72,10 @@ module CWE
       @views_by_id = {} of Int32 => View
       views.each { |v| @views_by_id[v.id] = v }
       @sorted_views = views.sort
+
+      @external_refs_by_id = {} of String => ExternalReference
+      external_references.each { |r| @external_refs_by_id[r.reference_id] = r }
+      @sorted_external_refs = external_references.sort_by(&.reference_id)
 
       @children_index = Hash(Int32, Array(Weakness)).new { |h, k| h[k] = [] of Weakness }
       @sorted.each do |w|
@@ -94,7 +101,25 @@ module CWE
       ws = doc["weaknesses"].as_a.map { |w| weakness_from_json(w) }
       cats = doc["categories"]?.try(&.as_a.map { |c| category_from_json(c) }) || [] of Category
       vws = doc["views"]?.try(&.as_a.map { |v| view_from_json(v) }) || [] of View
-      new(version, generated, ws, cats, vws)
+      ers = doc["external_references"]?.try(&.as_a.map { |r| external_reference_from_json(r) }) ||
+            [] of ExternalReference
+      new(version, generated, ws, cats, vws, ers)
+    end
+
+    private def self.external_reference_from_json(j : ::JSON::Any) : ExternalReference
+      ExternalReference.new(
+        reference_id: j["reference_id"].as_s,
+        authors: (j["authors"]?.try(&.as_a.map(&.as_s)) || [] of String),
+        title: s(j, "title"),
+        edition: s(j, "edition"),
+        publication: s(j, "publication"),
+        publication_year: s(j, "publication_year"),
+        publication_month: s(j, "publication_month"),
+        publication_day: s(j, "publication_day"),
+        publisher: s(j, "publisher"),
+        url: s(j, "url"),
+        url_date: s(j, "url_date"),
+      )
     end
 
     private def self.category_from_json(j : ::JSON::Any) : Category
@@ -106,6 +131,11 @@ module CWE
         status: Status.parse_label(status_raw),
         summary: s(j, "summary"),
         members: parse_members(j["members"]?),
+        notes: (j["notes"]?.try(&.as_a.map { |x| parse_note(x) }) || [] of Note),
+        taxonomy_mappings: (j["taxonomy_mappings"]?.try(&.as_a.map { |x| parse_taxonomy(x) }) || [] of TaxonomyMapping),
+        references: (j["references"]?.try(&.as_a.map { |x| parse_reference_link(x) }) || [] of ReferenceLink),
+        mapping_notes: j["mapping_notes"]?.try { |x| parse_mapping_notes(x) },
+        content_history: j["content_history"]?.try { |x| parse_content_history(x) },
         raw_status: status_raw,
       )
     end
@@ -121,7 +151,77 @@ module CWE
         objective: s(j, "objective"),
         filter: s(j, "filter"),
         members: parse_members(j["members"]?),
+        audience: (j["audience"]?.try(&.as_a.map { |x| parse_stakeholder(x) }) || [] of Stakeholder),
+        notes: (j["notes"]?.try(&.as_a.map { |x| parse_note(x) }) || [] of Note),
+        references: (j["references"]?.try(&.as_a.map { |x| parse_reference_link(x) }) || [] of ReferenceLink),
+        mapping_notes: j["mapping_notes"]?.try { |x| parse_mapping_notes(x) },
+        content_history: j["content_history"]?.try { |x| parse_content_history(x) },
         raw_status: status_raw,
+      )
+    end
+
+    private def self.parse_reference_link(x : ::JSON::Any) : ReferenceLink
+      ReferenceLink.new(
+        external_reference_id: x["external_reference_id"]?.try(&.as_s) || "",
+        section: s(x, "section"),
+      )
+    end
+
+    private def self.parse_stakeholder(x : ::JSON::Any) : Stakeholder
+      Stakeholder.new(
+        type: x["type"]?.try(&.as_s) || "",
+        description: s(x, "description"),
+      )
+    end
+
+    private def self.parse_mapping_notes(j : ::JSON::Any) : MappingNotes
+      raw_usage = j["usage"]?.try(&.as_s)
+      reasons = (j["reasons"]?.try(&.as_a.map(&.as_s)) || [] of String)
+      suggestions = (j["suggestions"]?.try(&.as_a.map { |s| parse_mapping_suggestion(s) }) || [] of MappingSuggestion)
+      MappingNotes.new(
+        usage: MappingUsage.parse_label(raw_usage),
+        raw_usage: raw_usage,
+        rationale: s(j, "rationale"),
+        comments: s(j, "comments"),
+        reasons: reasons,
+        suggestions: suggestions,
+      )
+    end
+
+    private def self.parse_mapping_suggestion(x : ::JSON::Any) : MappingSuggestion
+      MappingSuggestion.new(
+        cwe_id: (x["cwe_id"]?.try(&.as_i64) || 0_i64).to_i32,
+        comment: s(x, "comment"),
+      )
+    end
+
+    private def self.parse_content_history(j : ::JSON::Any) : ContentHistory
+      ContentHistory.new(
+        submission_date: s(j, "submission_date"),
+        submission_name: s(j, "submission_name"),
+        submission_organization: s(j, "submission_organization"),
+        last_modification_date: s(j, "last_modification_date"),
+        modification_count: (j["modification_count"]?.try(&.as_i64) || 0_i64).to_i32,
+      )
+    end
+
+    private def self.parse_demonstrative_example(j : ::JSON::Any) : DemonstrativeExample
+      codes = (j["example_code"]?.try(&.as_a.map { |c| parse_example_code(c) }) || [] of ExampleCode)
+      bodies = (j["body_text"]?.try(&.as_a.map(&.as_s)) || [] of String)
+      refs = (j["reference_ids"]?.try(&.as_a.map(&.as_s)) || [] of String)
+      DemonstrativeExample.new(
+        intro_text: s(j, "intro_text"),
+        body_text: bodies,
+        example_code: codes,
+        reference_ids: refs,
+      )
+    end
+
+    private def self.parse_example_code(j : ::JSON::Any) : ExampleCode
+      ExampleCode.new(
+        code: j["code"]?.try(&.as_s) || "",
+        nature: s(j, "nature"),
+        language: s(j, "language"),
       )
     end
 
@@ -140,12 +240,14 @@ module CWE
       name = j["name"].as_s
       abs_raw = j["abstraction"]?.try(&.as_s)
       status_raw = j["status"]?.try(&.as_s)
+      structure_raw = j["structure"]?.try(&.as_s)
 
       Weakness.new(
         id: id,
         name: name,
         abstraction: Abstraction.parse_label(abs_raw),
         status: Status.parse_label(status_raw),
+        structure: Structure.parse_label(structure_raw),
         description: j["description"]?.try(&.as_s),
         extended_description: j["extended_description"]?.try(&.as_s),
         likelihood_of_exploit: j["likelihood_of_exploit"]?.try(&.as_s),
@@ -158,6 +260,7 @@ module CWE
         detection_methods: (j["detection_methods"]?.try(&.as_a.map { |x| parse_detection(x) }) || [] of DetectionMethod),
         potential_mitigations: (j["potential_mitigations"]?.try(&.as_a.map { |x| parse_mitigation(x) }) || [] of Mitigation),
         observed_examples: (j["observed_examples"]?.try(&.as_a.map { |x| parse_example(x) }) || [] of ObservedExample),
+        demonstrative_examples: (j["demonstrative_examples"]?.try(&.as_a.map { |x| parse_demonstrative_example(x) }) || [] of DemonstrativeExample),
         taxonomy_mappings: (j["taxonomy_mappings"]?.try(&.as_a.map { |x| parse_taxonomy(x) }) || [] of TaxonomyMapping),
         related_attack_patterns: (j["related_attack_patterns"]?.try(&.as_a.map(&.as_i64.to_i32)) || [] of Int32),
         notes: (j["notes"]?.try(&.as_a.map { |x| parse_note(x) }) || [] of Note),
@@ -165,8 +268,12 @@ module CWE
         functional_areas: (j["functional_areas"]?.try(&.as_a.map(&.as_s)) || [] of String),
         affected_resources: (j["affected_resources"]?.try(&.as_a.map(&.as_s)) || [] of String),
         exploitation_factors: (j["exploitation_factors"]?.try(&.as_a.map(&.as_s)) || [] of String),
+        references: (j["references"]?.try(&.as_a.map { |x| parse_reference_link(x) }) || [] of ReferenceLink),
+        mapping_notes: j["mapping_notes"]?.try { |x| parse_mapping_notes(x) },
+        content_history: j["content_history"]?.try { |x| parse_content_history(x) },
         raw_abstraction: abs_raw,
         raw_status: status_raw,
+        raw_structure: structure_raw,
       )
     end
 
@@ -413,6 +520,29 @@ module CWE
     def view!(id : String) : View
       i = CWE.parse_id(id)
       @views_by_id[i]? || raise NotFoundError.new("#{id} is not a View in this catalog")
+    end
+
+    # ---------- External references ----------
+
+    # All catalog-level external references (citations), sorted by their
+    # `Reference_ID` (e.g. `"REF-1"`, `"REF-10"`, …).
+    def external_references : Array(ExternalReference)
+      @sorted_external_refs
+    end
+
+    # Resolve a `Reference_ID` such as `"REF-2"` to its full citation. Returns
+    # nil if the id is not in the registry.
+    def external_reference(id : String) : ExternalReference?
+      @external_refs_by_id[id]?
+    end
+
+    def external_reference!(id : String) : ExternalReference
+      external_reference(id) || raise NotFoundError.new("external reference #{id} not in catalog")
+    end
+
+    # Number of catalog-level external references.
+    def external_reference_count : Int32
+      @sorted_external_refs.size
     end
 
     # ---------- Unified entry lookup ----------

@@ -55,6 +55,7 @@ Each `CWE::Weakness` exposes:
 | `id`, `cwe_id`, `url` | `Int32`, `"CWE-79"`, `https://...` |
 | `name` | `String` |
 | `abstraction` | `CWE::Abstraction` (`Pillar`, `Class`, `Base`, `Variant`, `Compound`) |
+| `structure` | `CWE::Structure` (`Simple`, `Composite`, `Chain`) |
 | `status` | `CWE::Status` (`Stable`, `Draft`, `Incomplete`, `Deprecated`, …) |
 | `description`, `extended_description` | `String?` |
 | `likelihood_of_exploit` | `String?` |
@@ -63,12 +64,65 @@ Each `CWE::Weakness` exposes:
 | `potential_mitigations` | `Array(CWE::Mitigation)` — phase + strategy + description |
 | `detection_methods` | `Array(CWE::DetectionMethod)` |
 | `observed_examples` | `Array(CWE::ObservedExample)` — CVE references |
+| `demonstrative_examples` | `Array(CWE::DemonstrativeExample)` — code samples (Bad/Good/Attack) |
 | `applicable_platforms` | `Array(CWE::ApplicablePlatform)` |
 | `alternate_terms` | `Array(CWE::AlternateTerm)` |
 | `modes_of_introduction` | `Array(CWE::ModeOfIntroduction)` |
 | `taxonomy_mappings` | `Array(CWE::TaxonomyMapping)` — PLOVER, OWASP, CAPEC, … |
 | `related_attack_patterns` | `Array(Int32)` — CAPEC ids |
+| `references` | `Array(CWE::ReferenceLink)` — `REF-N` citations |
+| `mapping_notes` | `CWE::MappingNotes?` — usage policy + rationale |
+| `content_history` | `CWE::ContentHistory?` — submission / last-modification dates |
 | `notes` | `Array(CWE::Note)` |
+
+Convenience helpers:
+
+```crystal
+w = CWE.find!("CWE-79")
+w.mapping_usage   # => CWE::MappingUsage::Allowed
+w.mappable?       # => true
+w.compound?       # => false  (Simple structure)
+w.deprecated?     # => false
+```
+
+### Mapping policy
+
+CWE 4.x assigns each entry a mapping `Usage` so tooling knows whether the
+entry is an acceptable target for a CVE / finding (`Allowed`,
+`Allowed-with-Review`, `Discouraged`, `Prohibited`). Categories and Views
+are always `Prohibited`.
+
+```crystal
+CWE.find!(79).mapping_usage         # => CWE::MappingUsage::Allowed
+CWE.find!(20).mapping_usage         # => CWE::MappingUsage::Discouraged (Class-level)
+CWE.category!(227).mapping_usage    # => CWE::MappingUsage::Prohibited
+```
+
+### Demonstrative examples
+
+```crystal
+w = CWE.find!(89)  # SQL Injection
+ex = w.demonstrative_examples.first
+ex.intro_text                     # prose intro
+ex.example_code.first.language    # => "Java"
+ex.example_code.first.nature      # => "Bad"
+ex.example_code.first.code        # the snippet
+```
+
+### External references
+
+CWE stores all citations once in a catalog-level registry; individual
+entries link to them by id.
+
+```crystal
+w = CWE.find!(79)
+link = w.references.first         # => CWE::ReferenceLink(@external_reference_id="REF-709", …)
+ref  = CWE.external_reference!(link.external_reference_id)
+ref.title    # => "OWASP …"
+ref.url      # => "https://…"
+
+CWE.external_references.size  # => 1000+
+```
 
 ### Walking the hierarchy
 
@@ -132,10 +186,11 @@ CWE.entry(99999) # => nil
 ### Catalog metadata
 
 ```crystal
-CWE.catalog_version # => "4.20"
-CWE.size            # => 944  (weaknesses)
-CWE.categories.size # => 422
-CWE.views.size      # => 59
+CWE.catalog_version           # => "4.20"
+CWE.size                      # => 944  (weaknesses)
+CWE.categories.size           # => 422
+CWE.views.size                # => 59
+CWE.external_references.size  # => 1026
 ```
 
 ## Examples
@@ -163,10 +218,17 @@ crystal spec
 Regenerate the embedded data blob from a fresh MITRE CWE export:
 
 ```sh
-# Drop the new CSV at data/cwec.csv (MITRE "view 1000"), then:
+# Drop both files at data/, then:
+#   data/cwec.csv         — MITRE "view 1000" CSV
+#   data/cwec_v4.20.xml   — full XML (needed for Categories, Views,
+#                           Demonstrative_Examples, Mapping_Notes,
+#                           References, Content_History, Audience)
 crystal run data/build_data.cr
 crystal spec
 ```
+
+The build is incremental — without the XML the catalog still loads, it
+just won't include Categories, Views, or any of the XML-only blocks.
 
 The embedded data lives at `src/cwe/data/weaknesses.json` and is read into
 the binary at compile time via `{{ read_file(...) }}`.
