@@ -1,0 +1,15 @@
+/docs/
+/lib/
+/bin/
+/.shards/
+*.dwarf
+
+# Optional MITRE XML used by the data build script for version detection.
+# Not committed because of its size; users can drop it back at build time.
+/data/cwec_v*.xml
+/data/cwec_v*.xml.zip
+/data/*.csv.zip
+
+# Libraries don't need dependency lock
+# Dependencies will be locked in applications that use them
+/shard.lock
