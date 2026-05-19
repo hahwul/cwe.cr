@@ -78,6 +78,10 @@ CWE.children_of(79)      # => [CWE-80, CWE-81, CWE-83, CWE-84, CWE-85, CWE-86, C
 CWE.ancestors_of(79)     # nearest-first transitive closure
 CWE.descendants_of(79)
 CWE.pillar_of(79)        # => CWE-707
+
+# All edges are O(1) lookups via a pre-built index. Pass view_id to restrict
+# to a particular CWE view (1000 = Research, 1003 = Simplified Mapping):
+CWE.parents_of(79, view_id: 1000)
 ```
 
 ### Search
@@ -107,11 +111,31 @@ CWE.find!(79).to_json
 # }
 ```
 
+### Categories and Views
+
+`CWE` includes the full MITRE catalog — not just Weaknesses, but also
+Categories (informal groupings, "Mapping Prohibited") and Views (slices of
+the catalog organised around a stakeholder's perspective).
+
+```crystal
+CWE.category!(227)  # => CWE::Category: "7PK - API Abuse" (10 members)
+CWE.view!(1000)     # => CWE::View: "Research Concepts" (Graph)
+CWE.members_of(1000) # => Array(CWE::Weakness) — the resolved members
+
+# Unified lookup when you don't know which kind of entity an id refers to:
+CWE.entry(79)    # => Weakness
+CWE.entry(227)   # => Category
+CWE.entry(1000)  # => View
+CWE.entry(99999) # => nil
+```
+
 ### Catalog metadata
 
 ```crystal
 CWE.catalog_version # => "4.20"
-CWE.size            # => 944
+CWE.size            # => 944  (weaknesses)
+CWE.categories.size # => 422
+CWE.views.size      # => 59
 ```
 
 ## Examples

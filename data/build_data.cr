@@ -17,12 +17,20 @@
 # tokens that don't match a known field name.
 require "csv"
 require "json"
+require "xml"
 require "file_utils"
 
 ROOT     = File.expand_path("..", __DIR__)
 CSV_PATH = File.join(ROOT, "data", "cwec.csv")
 OUT_DIR  = File.join(ROOT, "src", "cwe", "data")
 OUT_PATH = File.join(OUT_DIR, "weaknesses.json")
+
+# Optional: when this XML file is present, Categories and Views are
+# extracted from it too. The CSV export only contains weaknesses, so the
+# XML is the only source for these auxiliary entities.
+XML_PATH_CANDIDATES = [
+  File.join(ROOT, "data", "cwec.xml"),
+] + Dir.glob(File.join(ROOT, "data", "cwec_v*.xml"))
 
 # Known field names per structured column. Tokens that exactly equal one of
 # these are treated as keys; everything in between is the value.
@@ -31,7 +39,8 @@ ORDINALITY_FIELDS = Set{"ORDINALITY", "DESCRIPTION"}
 PLATFORM_FIELDS   = Set{
   "LANGUAGE NAME", "LANGUAGE CLASS", "LANGUAGE PREVALENCE",
   "TECHNOLOGY NAME", "TECHNOLOGY CLASS", "TECHNOLOGY PREVALENCE",
-  "OPERATING_SYSTEM NAME", "OPERATING_SYSTEM CLASS", "OPERATING_SYSTEM PREVALENCE", "OPERATING_SYSTEM VERSION",
+  # MITRE's CSV uses "OPERATING SYSTEM …" with a space, not "OPERATING_SYSTEM …".
+  "OPERATING SYSTEM NAME", "OPERATING SYSTEM CLASS", "OPERATING SYSTEM PREVALENCE", "OPERATING SYSTEM VERSION",
   "ARCHITECTURE NAME", "ARCHITECTURE CLASS", "ARCHITECTURE PREVALENCE",
   "PARADIGM NAME", "PARADIGM CLASS", "PARADIGM PREVALENCE",
 }
@@ -42,8 +51,21 @@ DETECTION_FIELDS   = Set{"METHOD", "METHOD ID", "DESCRIPTION", "EFFECTIVENESS", 
 MITIGATION_FIELDS  = Set{"MITIGATION ID", "PHASE", "STRATEGY", "DESCRIPTION", "EFFECTIVENESS", "EFFECTIVENESS NOTES"}
 EXAMPLE_FIELDS     = Set{"REFERENCE", "DESCRIPTION", "LINK"}
 TAXONOMY_FIELDS    = Set{"TAXONOMY NAME", "ENTRY ID", "ENTRY NAME", "MAPPING FIT"}
-CAPEC_FIELDS       = Set{"CAPEC ID"}
 NOTE_FIELDS        = Set{"TYPE", "NOTE"}
+
+# Some columns are encoded as a bare list of values (no field names), e.g.
+# `::209::588::591::592::63::`. `parse_bare_list` splits on `::` and returns
+# the non-empty trimmed values.
+def parse_bare_list(raw : String) : Array(String)
+  result = [] of String
+  return result if raw.strip.empty?
+  raw.split("::").each do |chunk|
+    next if chunk.empty?
+    trimmed = chunk.strip
+    result << trimmed unless trimmed.empty?
+  end
+  result
+end
 
 def parse_structured(raw : String, known : Set(String)) : Array(Hash(String, String))
   result = [] of Hash(String, String)
@@ -132,8 +154,14 @@ while csv.next
   mitigations = parse_structured(csv["Potential Mitigations"], MITIGATION_FIELDS)
   examples    = parse_structured(csv["Observed Examples"], EXAMPLE_FIELDS)
   taxonomies  = parse_structured(csv["Taxonomy Mappings"], TAXONOMY_FIELDS)
-  capecs      = parse_structured(csv["Related Attack Patterns"], CAPEC_FIELDS)
+  # CAPEC IDs are encoded as a bare `::N::N::` list, not key/value pairs.
+  capecs      = parse_bare_list(csv["Related Attack Patterns"])
   notes       = parse_structured(csv["Notes"], NOTE_FIELDS)
+
+  background_details  = parse_bare_list(csv["Background Details"])
+  functional_areas    = parse_bare_list(csv["Functional Areas"])
+  affected_resources  = parse_bare_list(csv["Affected Resources"])
+  exploitation_factors = parse_bare_list(csv["Exploitation Factors"])
 
   h = {} of String => JSON::Any
   h["id"] = JSON::Any.new(id.to_i64)
@@ -261,14 +289,21 @@ while csv.next
   end
 
   unless capecs.empty?
-    arr = capecs.compact_map do |r|
-      if id_str = r["CAPEC ID"]?
-        if cid = id_str.to_i64?
-          JSON::Any.new(cid)
-        end
-      end
-    end
+    arr = capecs.compact_map { |s| s.to_i64?.try { |i| JSON::Any.new(i) } }
     h["related_attack_patterns"] = JSON::Any.new(arr) unless arr.empty?
+  end
+
+  unless background_details.empty?
+    h["background_details"] = JSON::Any.new(background_details.map { |s| JSON::Any.new(s) })
+  end
+  unless functional_areas.empty?
+    h["functional_areas"] = JSON::Any.new(functional_areas.map { |s| JSON::Any.new(s) })
+  end
+  unless affected_resources.empty?
+    h["affected_resources"] = JSON::Any.new(affected_resources.map { |s| JSON::Any.new(s) })
+  end
+  unless exploitation_factors.empty?
+    h["exploitation_factors"] = JSON::Any.new(exploitation_factors.map { |s| JSON::Any.new(s) })
   end
 
   unless notes.empty?
@@ -306,13 +341,110 @@ if meta_version == "unknown"
   meta_version = File.read(vfile).strip if File.exists?(vfile)
 end
 
+# --- Extract Categories and Views from the XML (optional) -------------------
+#
+# The XML uses the `http://cwe.mitre.org/cwe-7` default namespace. Crystal's
+# `XML.parse` keeps that namespace inline, so we navigate by local-name via
+# `XPath.string`-style matching. We use ad-hoc traversal — the structure is
+# shallow and stable enough that introducing a full XPath dependency isn't
+# worth the cost.
+categories = [] of Hash(String, JSON::Any)
+views = [] of Hash(String, JSON::Any)
+
+xml_path = XML_PATH_CANDIDATES.find { |p| File.exists?(p) }
+if xml_path
+  doc = XML.parse(File.read(xml_path))
+
+  # Direct text content of the first child element with the given local name.
+  text_of = ->(parent : XML::Node, local : String) do
+    parent.children.find { |c| c.element? && c.name == local }.try(&.content)
+  end
+
+  collect_members = ->(parent : XML::Node) do
+    mlist = [] of Hash(String, JSON::Any)
+    parent.children.each do |child|
+      next unless child.element? && child.name == "Has_Member"
+      cid = child["CWE_ID"]?.try(&.to_i64?) || next
+      vid = child["View_ID"]?.try(&.to_i64?) || 0_i64
+      mlist << {
+        "cwe_id"  => JSON::Any.new(cid),
+        "view_id" => JSON::Any.new(vid),
+      } of String => JSON::Any
+    end
+    mlist
+  end
+
+  doc.root.try &.children.each do |group|
+    next unless group.element?
+    case group.name
+    when "Categories"
+      group.children.each do |cat|
+        next unless cat.element? && cat.name == "Category"
+        id = cat["ID"]?.try(&.to_i?) || next
+        members = [] of Hash(String, JSON::Any)
+        summary = ""
+        cat.children.each do |child|
+          next unless child.element?
+          case child.name
+          when "Summary"       then summary = child.content.strip
+          when "Relationships" then members = collect_members.call(child)
+          end
+        end
+        entry = {} of String => JSON::Any
+        entry["id"] = JSON::Any.new(id.to_i64)
+        entry["name"] = JSON::Any.new(cat["Name"]? || "")
+        entry["status"] = JSON::Any.new(cat["Status"]? || "")
+        entry["summary"] = JSON::Any.new(summary) unless summary.empty?
+        unless members.empty?
+          entry["members"] = JSON::Any.new(members.map { |m| JSON::Any.new(m) })
+        end
+        categories << entry
+      end
+    when "Views"
+      group.children.each do |view|
+        next unless view.element? && view.name == "View"
+        id = view["ID"]?.try(&.to_i?) || next
+        members = [] of Hash(String, JSON::Any)
+        objective = ""
+        filter = ""
+        view.children.each do |child|
+          next unless child.element?
+          case child.name
+          when "Objective" then objective = child.content.strip
+          when "Filter"    then filter = child.content.strip
+          when "Members"   then members = collect_members.call(child)
+          end
+        end
+        entry = {} of String => JSON::Any
+        entry["id"] = JSON::Any.new(id.to_i64)
+        entry["name"] = JSON::Any.new(view["Name"]? || "")
+        entry["type"] = JSON::Any.new(view["Type"]? || "")
+        entry["status"] = JSON::Any.new(view["Status"]? || "")
+        entry["objective"] = JSON::Any.new(objective) unless objective.empty?
+        entry["filter"] = JSON::Any.new(filter) unless filter.empty?
+        unless members.empty?
+          entry["members"] = JSON::Any.new(members.map { |m| JSON::Any.new(m) })
+        end
+        views << entry
+      end
+    end
+  end
+end
+
+categories.sort_by! { |h| h["id"].as_i64 }
+views.sort_by! { |h| h["id"].as_i64 }
+
 top = {} of String => JSON::Any
 top["catalog_version"] = JSON::Any.new(meta_version)
 top["generated_at"] = JSON::Any.new(Time.utc.to_rfc3339)
 top["weakness_count"] = JSON::Any.new(weaknesses.size.to_i64)
+top["category_count"] = JSON::Any.new(categories.size.to_i64)
+top["view_count"] = JSON::Any.new(views.size.to_i64)
 top["weaknesses"] = JSON::Any.new(weaknesses.map { |h| JSON::Any.new(h) })
+top["categories"] = JSON::Any.new(categories.map { |h| JSON::Any.new(h) })
+top["views"] = JSON::Any.new(views.map { |h| JSON::Any.new(h) })
 
 File.write(OUT_PATH, JSON::Any.new(top).to_json)
 
-puts "wrote #{weaknesses.size} weaknesses to #{OUT_PATH}"
+puts "wrote #{weaknesses.size} weaknesses, #{categories.size} categories, #{views.size} views to #{OUT_PATH}"
 puts "size: #{File.size(OUT_PATH).humanize_bytes}"

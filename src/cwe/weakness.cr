@@ -37,6 +37,10 @@ module CWE
     getter taxonomy_mappings : Array(TaxonomyMapping)
     getter related_attack_patterns : Array(Int32)
     getter notes : Array(Note)
+    getter background_details : Array(String)
+    getter functional_areas : Array(String)
+    getter affected_resources : Array(String)
+    getter exploitation_factors : Array(String)
 
     # Raw fields kept for the catalog's internal use; not part of the public
     # surface but exposed for callers that want to introspect the underlying
@@ -64,6 +68,10 @@ module CWE
       @taxonomy_mappings : Array(TaxonomyMapping) = [] of TaxonomyMapping,
       @related_attack_patterns : Array(Int32) = [] of Int32,
       @notes : Array(Note) = [] of Note,
+      @background_details : Array(String) = [] of String,
+      @functional_areas : Array(String) = [] of String,
+      @affected_resources : Array(String) = [] of String,
+      @exploitation_factors : Array(String) = [] of String,
       @raw_abstraction : String? = nil,
       @raw_status : String? = nil
     )

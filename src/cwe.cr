@@ -17,6 +17,7 @@ require "./cwe/version"
 require "./cwe/error"
 require "./cwe/types"
 require "./cwe/weakness"
+require "./cwe/category"
 require "./cwe/catalog"
 require "./cwe/json"
 
@@ -122,24 +123,82 @@ module CWE
     catalog.with_status(status)
   end
 
-  def self.parents_of(id : Int) : Array(Weakness)
-    catalog.parents_of(id)
+  def self.parents_of(id : Int, view_id : Int? = nil) : Array(Weakness)
+    catalog.parents_of(id, view_id)
   end
 
-  def self.children_of(id : Int) : Array(Weakness)
-    catalog.children_of(id)
+  def self.children_of(id : Int, view_id : Int? = nil) : Array(Weakness)
+    catalog.children_of(id, view_id)
   end
 
-  def self.ancestors_of(id : Int) : Array(Weakness)
-    catalog.ancestors_of(id)
+  def self.ancestors_of(id : Int, view_id : Int? = nil) : Array(Weakness)
+    catalog.ancestors_of(id, view_id)
   end
 
-  def self.descendants_of(id : Int) : Array(Weakness)
-    catalog.descendants_of(id)
+  def self.descendants_of(id : Int, view_id : Int? = nil) : Array(Weakness)
+    catalog.descendants_of(id, view_id)
   end
 
   def self.pillar_of(id : Int) : Weakness?
     catalog.pillar_of(id)
+  end
+
+  # ---- Categories ----
+
+  def self.category(id : Int) : Category?
+    catalog.category(id)
+  end
+
+  def self.category(id : String) : Category?
+    catalog.category(id)
+  end
+
+  def self.category!(id : Int) : Category
+    catalog.category!(id)
+  end
+
+  def self.category!(id : String) : Category
+    catalog.category!(id)
+  end
+
+  def self.categories : Array(Category)
+    catalog.all_categories
+  end
+
+  # ---- Views ----
+
+  def self.view(id : Int) : View?
+    catalog.view(id)
+  end
+
+  def self.view(id : String) : View?
+    catalog.view(id)
+  end
+
+  def self.view!(id : Int) : View
+    catalog.view!(id)
+  end
+
+  def self.view!(id : String) : View
+    catalog.view!(id)
+  end
+
+  def self.views : Array(View)
+    catalog.all_views
+  end
+
+  # Look up any entry by id: Weakness, Category, or View.
+  def self.entry(id : Int) : Weakness | Category | View | Nil
+    catalog.entry(id)
+  end
+
+  def self.entry(id : String) : Weakness | Category | View | Nil
+    catalog.entry(id)
+  end
+
+  # Resolved member weaknesses of a Category or View.
+  def self.members_of(id : Int) : Array(Weakness)
+    catalog.members_of(id)
   end
 
   # The MITRE catalog version embedded in this build (e.g. `"4.20"`).

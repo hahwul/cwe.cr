@@ -1,6 +1,7 @@
 require "json"
 require "./types"
 require "./weakness"
+require "./category"
 require "./error"
 
 module CWE
@@ -21,10 +22,19 @@ module CWE
     EMBEDDED_JSON = {{ read_file("#{__DIR__}/data/weaknesses.json") }}
 
     @@default : Catalog?
+    @@default_mutex = Mutex.new
 
-    # The catalog backed by the embedded MITRE data. Built on first access.
+    # The catalog backed by the embedded MITRE data. Built on first access;
+    # subsequent calls return the cached instance. Thread-safe — concurrent
+    # first calls won't race on the lazy parse.
     def self.default : Catalog
-      @@default ||= from_json(EMBEDDED_JSON)
+      if existing = @@default
+        return existing
+      end
+      @@default_mutex.synchronize do
+        @@default ||= from_json(EMBEDDED_JSON)
+      end
+      @@default.not_nil!
     end
 
     # The MITRE catalog version string, e.g. `"4.20"`, or `"unknown"` if the
@@ -35,12 +45,41 @@ module CWE
 
     @by_id : Hash(Int32, Weakness)
     @sorted : Array(Weakness)
+    @categories_by_id : Hash(Int32, Category)
+    @sorted_categories : Array(Category)
+    @views_by_id : Hash(Int32, View)
+    @sorted_views : Array(View)
+    # Inverted index: for each weakness id, the set of weaknesses that point
+    # at it via a `ChildOf` edge. Built once at construction so `children_of`
+    # is O(children) instead of O(catalog).
+    @children_index : Hash(Int32, Array(Weakness))
 
     def initialize(@catalog_version : String, @generated_at : String,
-                   weaknesses : Array(Weakness))
+                   weaknesses : Array(Weakness),
+                   categories : Array(Category) = [] of Category,
+                   views : Array(View) = [] of View)
       @by_id = {} of Int32 => Weakness
       weaknesses.each { |w| @by_id[w.id] = w }
       @sorted = weaknesses.sort
+
+      @categories_by_id = {} of Int32 => Category
+      categories.each { |c| @categories_by_id[c.id] = c }
+      @sorted_categories = categories.sort
+
+      @views_by_id = {} of Int32 => View
+      views.each { |v| @views_by_id[v.id] = v }
+      @sorted_views = views.sort
+
+      @children_index = Hash(Int32, Array(Weakness)).new { |h, k| h[k] = [] of Weakness }
+      @sorted.each do |w|
+        seen_parents = Set(Int32).new
+        w.related_weaknesses.each do |r|
+          next unless r.nature == "ChildOf"
+          next if seen_parents.includes?(r.cwe_id)
+          seen_parents << r.cwe_id
+          @children_index[r.cwe_id] << w
+        end
+      end
     end
 
     # Build a `Catalog` from a JSON document with the schema produced by
@@ -53,7 +92,47 @@ module CWE
       generated = doc["generated_at"]?.try(&.as_s) || ""
 
       ws = doc["weaknesses"].as_a.map { |w| weakness_from_json(w) }
-      new(version, generated, ws)
+      cats = doc["categories"]?.try(&.as_a.map { |c| category_from_json(c) }) || [] of Category
+      vws = doc["views"]?.try(&.as_a.map { |v| view_from_json(v) }) || [] of View
+      new(version, generated, ws, cats, vws)
+    end
+
+    private def self.category_from_json(j : ::JSON::Any) : Category
+      id = j["id"].as_i64.to_i32
+      status_raw = j["status"]?.try(&.as_s)
+      Category.new(
+        id: id,
+        name: j["name"]?.try(&.as_s) || "",
+        status: Status.parse_label(status_raw),
+        summary: s(j, "summary"),
+        members: parse_members(j["members"]?),
+        raw_status: status_raw,
+      )
+    end
+
+    private def self.view_from_json(j : ::JSON::Any) : View
+      id = j["id"].as_i64.to_i32
+      status_raw = j["status"]?.try(&.as_s)
+      View.new(
+        id: id,
+        name: j["name"]?.try(&.as_s) || "",
+        type: s(j, "type"),
+        status: Status.parse_label(status_raw),
+        objective: s(j, "objective"),
+        filter: s(j, "filter"),
+        members: parse_members(j["members"]?),
+        raw_status: status_raw,
+      )
+    end
+
+    private def self.parse_members(j : ::JSON::Any?) : Array(Category::Member)
+      return [] of Category::Member unless j
+      j.as_a.map do |m|
+        Category::Member.new(
+          cwe_id: (m["cwe_id"]?.try(&.as_i64) || 0_i64).to_i32,
+          view_id: (m["view_id"]?.try(&.as_i64) || 0_i64).to_i32,
+        )
+      end
     end
 
     private def self.weakness_from_json(j : ::JSON::Any) : Weakness
@@ -82,6 +161,10 @@ module CWE
         taxonomy_mappings: (j["taxonomy_mappings"]?.try(&.as_a.map { |x| parse_taxonomy(x) }) || [] of TaxonomyMapping),
         related_attack_patterns: (j["related_attack_patterns"]?.try(&.as_a.map(&.as_i64.to_i32)) || [] of Int32),
         notes: (j["notes"]?.try(&.as_a.map { |x| parse_note(x) }) || [] of Note),
+        background_details: (j["background_details"]?.try(&.as_a.map(&.as_s)) || [] of String),
+        functional_areas: (j["functional_areas"]?.try(&.as_a.map(&.as_s)) || [] of String),
+        affected_resources: (j["affected_resources"]?.try(&.as_a.map(&.as_s)) || [] of String),
+        exploitation_factors: (j["exploitation_factors"]?.try(&.as_a.map(&.as_s)) || [] of String),
         raw_abstraction: abs_raw,
         raw_status: status_raw,
       )
@@ -113,20 +196,19 @@ module CWE
 
     private def self.parse_platform(x) : ApplicablePlatform
       keys = x.as_h.keys
-      kind = if keys.any? { |k| k.starts_with?("language") }
-               "Language"
-             elsif keys.any? { |k| k.starts_with?("technology") }
-               "Technology"
-             elsif keys.any? { |k| k.starts_with?("operating_system") }
-               "Operating_System"
-             elsif keys.any? { |k| k.starts_with?("architecture") }
-               "Architecture"
-             elsif keys.any? { |k| k.starts_with?("paradigm") }
-               "Paradigm"
-             else
-               "Unknown"
-             end
-      prefix = kind.downcase
+      kind, prefix = if keys.any? { |k| k.starts_with?("language") }
+                       {"Language", "language"}
+                     elsif keys.any? { |k| k.starts_with?("technology") }
+                       {"Technology", "technology"}
+                     elsif keys.any? { |k| k.starts_with?("operating_system") }
+                       {"OperatingSystem", "operating_system"}
+                     elsif keys.any? { |k| k.starts_with?("architecture") }
+                       {"Architecture", "architecture"}
+                     elsif keys.any? { |k| k.starts_with?("paradigm") }
+                       {"Paradigm", "paradigm"}
+                     else
+                       {"Unknown", "unknown"}
+                     end
       ApplicablePlatform.new(
         kind: kind,
         name: s(x, "#{prefix}_name"),
@@ -274,6 +356,92 @@ module CWE
       end
     end
 
+    # ---------- Categories ----------
+
+    # Number of categories in the catalog (0 if the build was CSV-only).
+    def category_count : Int32
+      @sorted_categories.size
+    end
+
+    def all_categories : Array(Category)
+      @sorted_categories
+    end
+
+    def category(id : Int) : Category?
+      @categories_by_id[id.to_i32]?
+    end
+
+    def category(id : String) : Category?
+      if i = CWE.parse_id?(id)
+        @categories_by_id[i]?
+      end
+    end
+
+    def category!(id : Int) : Category
+      category(id) || raise NotFoundError.new("CWE-#{id} is not a Category in this catalog")
+    end
+
+    def category!(id : String) : Category
+      i = CWE.parse_id(id)
+      @categories_by_id[i]? || raise NotFoundError.new("#{id} is not a Category in this catalog")
+    end
+
+    # ---------- Views ----------
+
+    def view_count : Int32
+      @sorted_views.size
+    end
+
+    def all_views : Array(View)
+      @sorted_views
+    end
+
+    def view(id : Int) : View?
+      @views_by_id[id.to_i32]?
+    end
+
+    def view(id : String) : View?
+      if i = CWE.parse_id?(id)
+        @views_by_id[i]?
+      end
+    end
+
+    def view!(id : Int) : View
+      view(id) || raise NotFoundError.new("CWE-#{id} is not a View in this catalog")
+    end
+
+    def view!(id : String) : View
+      i = CWE.parse_id(id)
+      @views_by_id[i]? || raise NotFoundError.new("#{id} is not a View in this catalog")
+    end
+
+    # ---------- Unified entry lookup ----------
+
+    # Look up any entry by id — returns a `Weakness`, `Category`, or `View`
+    # (in that order of preference). Useful when you don't know up front
+    # which kind of CWE entity a given id refers to.
+    def entry(id : Int) : Weakness | Category | View | Nil
+      find(id) || category(id) || view(id)
+    end
+
+    def entry(id : String) : Weakness | Category | View | Nil
+      find(id) || category(id) || view(id)
+    end
+
+    # Member weaknesses (resolved) of a category or view. Members that
+    # reference Categories or Views (rare nesting) are skipped — use
+    # `Category#members` / `View#members` for the raw edge list.
+    def members_of(id : Int) : Array(Weakness)
+      mem_ids = if cat = category(id)
+                  cat.member_ids
+                elsif v = view(id)
+                  v.member_ids
+                else
+                  return [] of Weakness
+                end
+      mem_ids.compact_map { |m| find(m) }
+    end
+
     # ---------- Filters ----------
 
     def with_abstraction(level : Abstraction) : Array(Weakness)
@@ -286,26 +454,40 @@ module CWE
 
     # ---------- Relationships ----------
 
-    # Direct parents of `id` per the catalog's `ChildOf` edges.
-    def parents_of(id : Int) : Array(Weakness)
+    # Direct parents of `id` per the catalog's `ChildOf` edges. When
+    # `view_id` is given, only edges declared in that CWE view are returned
+    # (CWE catalog records the same parent twice when it appears in multiple
+    # views — view 1000 vs 1003 most commonly).
+    def parents_of(id : Int, view_id : Int? = nil) : Array(Weakness)
       w = find(id) || return [] of Weakness
-      w.parent_relations.compact_map { |r| find(r.cwe_id) }.uniq
+      rels = w.parent_relations
+      if v = view_id
+        rels = rels.select { |r| r.view_id == v.to_i32 }
+      end
+      rels.compact_map { |r| find(r.cwe_id) }.uniq
     end
 
-    # Direct children of `id`. Computed by scanning the catalog for entries
-    # with a `ChildOf` edge pointing at `id`.
-    def children_of(id : Int) : Array(Weakness)
+    # Direct children of `id`. Resolved via the pre-built children index in
+    # O(children); when `view_id` is given, only children whose `ChildOf`
+    # edge belongs to that view are returned.
+    def children_of(id : Int, view_id : Int? = nil) : Array(Weakness)
       target = id.to_i32
-      @sorted.select do |w|
-        w.parent_relations.any? { |r| r.cwe_id == target }
+      kids = @children_index[target]? || ([] of Weakness)
+      if v = view_id
+        kids = kids.select do |w|
+          w.parent_relations.any? { |r| r.cwe_id == target && r.view_id == v.to_i32 }
+        end
       end
+      kids
     end
 
     # All ancestors (transitive closure of `ChildOf`), nearest first.
-    def ancestors_of(id : Int, max_depth : Int = 32) : Array(Weakness)
+    # `max_depth` guards against pathological catalogs; the real CWE has
+    # chains of length 3-4. `view_id` filters edges to a single CWE view.
+    def ancestors_of(id : Int, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
       seen = Set(Int32).new
       result = [] of Weakness
-      frontier = parents_of(id)
+      frontier = parents_of(id, view_id)
       depth = 0
       while !frontier.empty? && depth < max_depth
         frontier.each do |w|
@@ -313,17 +495,18 @@ module CWE
           seen << w.id
           result << w
         end
-        frontier = frontier.flat_map { |w| parents_of(w.id) }.reject { |w| seen.includes?(w.id) }.uniq
+        frontier = frontier.flat_map { |w| parents_of(w.id, view_id) }
+          .reject { |w| seen.includes?(w.id) }.uniq
         depth += 1
       end
       result
     end
 
     # All descendants (transitive closure of children), nearest first.
-    def descendants_of(id : Int, max_depth : Int = 32) : Array(Weakness)
+    def descendants_of(id : Int, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
       seen = Set(Int32).new
       result = [] of Weakness
-      frontier = children_of(id)
+      frontier = children_of(id, view_id)
       depth = 0
       while !frontier.empty? && depth < max_depth
         frontier.each do |w|
@@ -331,18 +514,23 @@ module CWE
           seen << w.id
           result << w
         end
-        frontier = frontier.flat_map { |w| children_of(w.id) }.reject { |w| seen.includes?(w.id) }.uniq
+        frontier = frontier.flat_map { |w| children_of(w.id, view_id) }
+          .reject { |w| seen.includes?(w.id) }.uniq
         depth += 1
       end
       result
     end
 
     # The pillar (top-level entry) reached by walking `ChildOf` edges from
-    # `id`. Returns nil if the entry has no ancestors or its ancestor chain
-    # never reaches a `Pillar`.
+    # `id`. Returns the entry itself if it is already a `Pillar`. Returns
+    # nil if `id` is not in the catalog. If the ancestor chain contains a
+    # `Pillar`, that is returned; otherwise the most distant ancestor is
+    # returned (some chains topple out at a `Class` rather than a `Pillar`).
     def pillar_of(id : Int) : Weakness?
+      w = find(id) || return nil
+      return w if w.abstraction == Abstraction::Pillar
       chain = ancestors_of(id)
-      chain.reverse.find { |w| w.abstraction == Abstraction::Pillar } ||
+      chain.reverse.find { |a| a.abstraction == Abstraction::Pillar } ||
         chain.last?
     end
 

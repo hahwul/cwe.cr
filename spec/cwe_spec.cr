@@ -262,4 +262,166 @@ describe CWE do
       cat.find!(79).name.should eq("Test entry")
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Regressions discovered during audit
+  # ---------------------------------------------------------------------------
+
+  describe "Data integrity (audit regressions)" do
+    it "populates CAPEC IDs for entries that have them" do
+      # Bug: the CAPEC column is encoded as a bare ::N::N:: list, not a
+      # ::CAPEC ID:N:: keyed pair. The build script must parse the list form.
+      CWE.find!(79).capec_ids.should_not be_empty
+      CWE.find!(79).capec_ids.should contain(85)
+      CWE.find!(89).capec_ids.should_not be_empty
+    end
+
+    it "parses Operating System applicable platforms" do
+      # Bug: MITRE's CSV uses 'OPERATING SYSTEM …' with a space, not the
+      # underscored form. Confirm the rebuild picks them up.
+      os = CWE.all.flat_map(&.applicable_platforms).select { |p| p.kind == "OperatingSystem" }
+      os.should_not be_empty
+    end
+
+    it "parses Architecture applicable platforms" do
+      arch = CWE.all.flat_map(&.applicable_platforms).select { |p| p.kind == "Architecture" }
+      arch.should_not be_empty
+    end
+
+    it "exposes background_details, functional_areas, affected_resources" do
+      CWE.find!(22).functional_areas.should contain("File Processing")
+      CWE.find!(22).affected_resources.should_not be_empty
+      CWE.all.count { |w| !w.background_details.empty? }.should be > 0
+    end
+
+    it "rejects integer-overflow CWE ids without crashing" do
+      CWE.parse_id?("99999999999").should be_nil
+      CWE.parse_id?("CWE-99999999999").should be_nil
+    end
+
+    it "accepts a stripped, leading-zero, mixed-case id" do
+      CWE.parse_id?("0079").should eq(79)
+      CWE.parse_id?("  Cwe-79  ").should eq(79)
+    end
+  end
+
+  describe "Catalog perf invariants" do
+    it "children_of uses the pre-built index (constant-time lookup)" do
+      # Sanity: 1000 calls should be effectively instant.
+      start = Time.instant
+      1000.times { CWE.children_of(79) }
+      elapsed = Time.instant - start
+      elapsed.total_milliseconds.should be < 200
+    end
+  end
+
+  describe "View-filtered relationship API" do
+    it "filters parents_of by view id" do
+      # CWE-79 has ChildOf -> CWE-74 in both view 1000 and view 1003.
+      CWE.parents_of(79, view_id: 1000).map(&.id).should eq([74])
+      CWE.parents_of(79, view_id: 1003).map(&.id).should eq([74])
+      CWE.parents_of(79, view_id: 9999).should be_empty
+    end
+
+    it "filters children_of by view id" do
+      kids_all = CWE.children_of(79).map(&.id).sort
+      kids_1000 = CWE.children_of(79, view_id: 1000).map(&.id).sort
+      kids_1000.should eq(kids_all) # children all live in view 1000 too
+      CWE.children_of(79, view_id: 9999).should be_empty
+    end
+  end
+
+  describe "pillar_of edge cases" do
+    it "returns the entry itself when it is already a Pillar" do
+      CWE.pillar_of(284).try(&.id).should eq(284)
+    end
+
+    it "returns nil for an id not in the catalog" do
+      CWE.pillar_of(999_999).should be_nil
+    end
+  end
+
+  describe "JSON output is camelCase throughout" do
+    it "emits camelCase keys on nested objects too" do
+      j = JSON.parse(CWE.find!(79).to_json).as_h
+      # Top-level
+      j["cweId"].as_s.should eq("CWE-79")
+      # relatedWeaknesses entries use cweId/viewId, not cwe_id/view_id
+      first_rel = j["relatedWeaknesses"].as_a.first.as_h
+      first_rel.has_key?("cweId").should be_true
+      first_rel.has_key?("cwe_id").should be_false
+      # potentialMitigations: mitigationId/effectivenessNotes
+      JSON.parse(CWE.find!(79).potential_mitigations.first.to_json).as_h.keys.none?(&.includes?("_")).should be_true
+      # taxonomyMappings uses taxonomyName
+      first_tax = j["taxonomyMappings"].as_a.first.as_h
+      first_tax.has_key?("taxonomyName").should be_true
+      first_tax.has_key?("taxonomy_name").should be_false
+    end
+
+    it "emits relatedAttackPatterns as an int array" do
+      j = JSON.parse(CWE.find!(79).to_json).as_h
+      j["relatedAttackPatterns"].as_a.all? { |x| x.as_i? }.should be_true
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Categories & Views (sourced from the XML supplement)
+  # ---------------------------------------------------------------------------
+
+  describe "Categories" do
+    it "loads MITRE Categories alongside Weaknesses" do
+      CWE.categories.size.should be > 100
+    end
+
+    it "looks up CWE-227 (7PK - API Abuse) as a Category" do
+      cat = CWE.category!(227)
+      cat.name.should eq("7PK - API Abuse")
+      cat.member_ids.should_not be_empty
+    end
+
+    it "returns nil for a Weakness id via .category" do
+      CWE.category(79).should be_nil
+    end
+
+    it "raises NotFoundError for an unknown category id" do
+      expect_raises(CWE::NotFoundError) { CWE.category!(999_999) }
+    end
+  end
+
+  describe "Views" do
+    it "loads MITRE Views" do
+      CWE.views.size.should be > 30
+    end
+
+    it "looks up CWE-1000 (Research Concepts) as a View" do
+      v = CWE.view!(1000)
+      v.name.should eq("Research Concepts")
+      v.type.should eq("Graph")
+      v.member_ids.should_not be_empty
+    end
+
+    it "members_of resolves member CWE ids to Weakness objects" do
+      members = CWE.members_of(1000)
+      members.should_not be_empty
+      members.all?(CWE::Weakness).should be_true
+    end
+  end
+
+  describe "Unified entry lookup" do
+    it "returns a Weakness for a weakness id" do
+      CWE.entry(79).should be_a(CWE::Weakness)
+    end
+
+    it "returns a Category for a category id" do
+      CWE.entry(227).should be_a(CWE::Category)
+    end
+
+    it "returns a View for a view id" do
+      CWE.entry(1000).should be_a(CWE::View)
+    end
+
+    it "returns nil for an unknown id" do
+      CWE.entry(999_999).should be_nil
+    end
+  end
 end

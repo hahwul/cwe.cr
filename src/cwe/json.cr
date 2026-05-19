@@ -93,6 +93,26 @@ module CWE
             json.array { @notes.each(&.to_json(json)) }
           end
         end
+        unless @background_details.empty?
+          json.field "backgroundDetails" do
+            json.array { @background_details.each { |s| json.string(s) } }
+          end
+        end
+        unless @functional_areas.empty?
+          json.field "functionalAreas" do
+            json.array { @functional_areas.each { |s| json.string(s) } }
+          end
+        end
+        unless @affected_resources.empty?
+          json.field "affectedResources" do
+            json.array { @affected_resources.each { |s| json.string(s) } }
+          end
+        end
+        unless @exploitation_factors.empty?
+          json.field "exploitationFactors" do
+            json.array { @exploitation_factors.each { |s| json.string(s) } }
+          end
+        end
       end
     end
   end

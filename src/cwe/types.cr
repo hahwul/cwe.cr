@@ -89,9 +89,16 @@ module CWE
     include JSON::Serializable
 
     getter nature : String
+
+    @[JSON::Field(key: "cweId")]
     getter cwe_id : Int32
+
+    @[JSON::Field(key: "viewId")]
     getter view_id : Int32
+
     getter ordinal : String?
+
+    @[JSON::Field(key: "chainId")]
     getter chain_id : String?
 
     def initialize(@nature, @cwe_id, @view_id, @ordinal = nil, @chain_id = nil)
@@ -117,11 +124,15 @@ module CWE
   struct Mitigation
     include JSON::Serializable
 
+    @[JSON::Field(key: "mitigationId")]
     getter mitigation_id : String?
+
     getter phase : String?
     getter strategy : String?
     getter description : String?
     getter effectiveness : String?
+
+    @[JSON::Field(key: "effectivenessNotes")]
     getter effectiveness_notes : String?
 
     def initialize(@mitigation_id = nil, @phase = nil, @strategy = nil,
@@ -133,9 +144,14 @@ module CWE
     include JSON::Serializable
 
     getter method : String
+
+    @[JSON::Field(key: "methodId")]
     getter method_id : String?
+
     getter description : String?
     getter effectiveness : String?
+
+    @[JSON::Field(key: "effectivenessNotes")]
     getter effectiveness_notes : String?
 
     def initialize(@method, @method_id = nil, @description = nil,
@@ -177,12 +193,15 @@ module CWE
   struct ApplicablePlatform
     include JSON::Serializable
 
-    # One of `"Language"`, `"Technology"`, `"Operating_System"`,
+    # One of `"Language"`, `"Technology"`, `"OperatingSystem"`,
     # `"Architecture"`, `"Paradigm"` — derived from which set of keys is
     # populated in the source row.
     getter kind : String
     getter name : String?
+
+    @[JSON::Field(key: "class")]
     getter class_label : String?
+
     getter prevalence : String?
     getter version : String?
 
@@ -193,9 +212,16 @@ module CWE
   struct TaxonomyMapping
     include JSON::Serializable
 
+    @[JSON::Field(key: "taxonomyName")]
     getter taxonomy_name : String
+
+    @[JSON::Field(key: "entryId")]
     getter entry_id : String?
+
+    @[JSON::Field(key: "entryName")]
     getter entry_name : String?
+
+    @[JSON::Field(key: "mappingFit")]
     getter mapping_fit : String?
 
     def initialize(@taxonomy_name, @entry_id = nil, @entry_name = nil, @mapping_fit = nil)
