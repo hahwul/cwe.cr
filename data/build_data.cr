@@ -136,31 +136,31 @@ while csv.next
   next if id_str.empty?
   id = id_str.to_i? || next
 
-  name        = csv["Name"]
+  name = csv["Name"]
   abstraction = csv["Weakness Abstraction"]
-  structure   = nil # Not in CSV; will stay null
-  status      = csv["Status"]
+  structure = nil # Not in CSV; will stay null
+  status = csv["Status"]
   description = csv["Description"]
-  ext_desc    = csv["Extended Description"]
-  likelihood  = csv["Likelihood of Exploit"]
+  ext_desc = csv["Extended Description"]
+  likelihood = csv["Likelihood of Exploit"]
 
-  related     = parse_structured(csv["Related Weaknesses"], RELATED_FIELDS)
+  related = parse_structured(csv["Related Weaknesses"], RELATED_FIELDS)
   ordinalities = parse_structured(csv["Weakness Ordinalities"], ORDINALITY_FIELDS)
-  platforms   = parse_structured(csv["Applicable Platforms"], PLATFORM_FIELDS)
-  alt_terms   = parse_structured(csv["Alternate Terms"], ALT_TERM_FIELDS)
-  intros      = parse_structured(csv["Modes Of Introduction"], INTRO_FIELDS)
+  platforms = parse_structured(csv["Applicable Platforms"], PLATFORM_FIELDS)
+  alt_terms = parse_structured(csv["Alternate Terms"], ALT_TERM_FIELDS)
+  intros = parse_structured(csv["Modes Of Introduction"], INTRO_FIELDS)
   consequences = parse_structured(csv["Common Consequences"], CONSEQUENCE_FIELDS)
-  detections  = parse_structured(csv["Detection Methods"], DETECTION_FIELDS)
+  detections = parse_structured(csv["Detection Methods"], DETECTION_FIELDS)
   mitigations = parse_structured(csv["Potential Mitigations"], MITIGATION_FIELDS)
-  examples    = parse_structured(csv["Observed Examples"], EXAMPLE_FIELDS)
-  taxonomies  = parse_structured(csv["Taxonomy Mappings"], TAXONOMY_FIELDS)
+  examples = parse_structured(csv["Observed Examples"], EXAMPLE_FIELDS)
+  taxonomies = parse_structured(csv["Taxonomy Mappings"], TAXONOMY_FIELDS)
   # CAPEC IDs are encoded as a bare `::N::N::` list, not key/value pairs.
-  capecs      = parse_bare_list(csv["Related Attack Patterns"])
-  notes       = parse_structured(csv["Notes"], NOTE_FIELDS)
+  capecs = parse_bare_list(csv["Related Attack Patterns"])
+  notes = parse_structured(csv["Notes"], NOTE_FIELDS)
 
-  background_details  = parse_bare_list(csv["Background Details"])
-  functional_areas    = parse_bare_list(csv["Functional Areas"])
-  affected_resources  = parse_bare_list(csv["Affected Resources"])
+  background_details = parse_bare_list(csv["Background Details"])
+  functional_areas = parse_bare_list(csv["Functional Areas"])
+  affected_resources = parse_bare_list(csv["Affected Resources"])
   exploitation_factors = parse_bare_list(csv["Exploitation Factors"])
 
   h = {} of String => JSON::Any

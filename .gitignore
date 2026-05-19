@@ -1,8 +1,10 @@
-/docs/
 /lib/
 /bin/
 /.shards/
 *.dwarf
+
+# Hwaro build output (built by CI; source lives in docs/)
+/docs/public/
 
 # Optional MITRE XML used by the data build script for version detection.
 # Not committed because of its size; users can drop it back at build time.

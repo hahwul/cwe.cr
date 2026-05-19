@@ -10,8 +10,8 @@ module CWE
   #
   # ```
   # w = CWE.find!("CWE-79")
-  # w.name        # => "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
-  # w.abstraction # => CWE::Abstraction::Base
+  # w.name                  # => "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+  # w.abstraction           # => CWE::Abstraction::Base
   # w.parents.map(&.cwe_id) # => [74]
   # ```
   class Weakness
@@ -73,7 +73,7 @@ module CWE
       @affected_resources : Array(String) = [] of String,
       @exploitation_factors : Array(String) = [] of String,
       @raw_abstraction : String? = nil,
-      @raw_status : String? = nil
+      @raw_status : String? = nil,
     )
     end
 

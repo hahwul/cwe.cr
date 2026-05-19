@@ -5,10 +5,10 @@
 #
 # ```
 # w = CWE.find!("CWE-79")
-# w.name        # => "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
-# w.abstraction # => CWE::Abstraction::Base
+# w.name                           # => "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+# w.abstraction                    # => CWE::Abstraction::Base
 # w.parent_relations.map(&.cwe_id) # => [74, 74]
-# w.summary     # => "CWE-79: Improper Neutralization of Input ... (Base, Stable)"
+# w.summary                        # => "CWE-79: Improper Neutralization of Input ... (Base, Stable)"
 # ```
 #
 # See `CWE::Catalog` for the full query API and `CWE::Weakness` for the
