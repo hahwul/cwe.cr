@@ -47,7 +47,7 @@ module CWE
     end
 
     def member_ids : Array(Int32)
-      @members.map(&.cwe_id).uniq
+      @members.map(&.cwe_id).uniq!
     end
 
     def <=>(other : Category) : Int32
@@ -135,7 +135,7 @@ module CWE
     end
 
     def member_ids : Array(Int32)
-      @members.map(&.cwe_id).uniq
+      @members.map(&.cwe_id).uniq!
     end
 
     def <=>(other : View) : Int32

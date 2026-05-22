@@ -1,0 +1,60 @@
+Lint/UselessAssign:
+  Excluded:
+    - spec/**
+    - data/**
+
+Lint/NotNil:
+  Excluded:
+    - spec/**
+    - src/cwe/catalog.cr  # mutex-guarded lazy init pattern
+
+# One-off build script and large CWE field serializers driven by spec shape.
+Metrics/CyclomaticComplexity:
+  Excluded:
+    - data/**
+    - src/cwe/json.cr
+    - src/cwe/catalog.cr
+
+Lint/ShadowingOuterLocalVar:
+  Excluded:
+    - data/**
+
+Naming/BlockParameterName:
+  Excluded:
+    - data/**
+  AllowedNames:
+    - _
+    - a
+    - b
+    - c
+    - d
+    - e
+    - f
+    - g
+    - h
+    - i
+    - j
+    - k
+    - l
+    - m
+    - n
+    - o
+    - p
+    - q
+    - r
+    - s
+    - t
+    - u
+    - v
+    - w
+    - x
+    - y
+    - z
+    - ex
+    - io
+    - id
+    - ip
+    - k1
+    - k2
+    - v1
+    - v2

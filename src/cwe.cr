@@ -27,7 +27,7 @@ module CWE
   # the id is tolerated; embedded whitespace is not.
   def self.parse_id?(input : String) : Int32?
     s = input.strip
-    return nil if s.empty?
+    return if s.empty?
 
     if md = /\A[Cc][Ww][Ee][-_:\s]?(\d+)\z/.match(s)
       md[1].to_i?
@@ -188,11 +188,11 @@ module CWE
   end
 
   # Look up any entry by id: Weakness, Category, or View.
-  def self.entry(id : Int) : Weakness | Category | View | Nil
+  def self.entry(id : Int) : Weakness | Category | View?
     catalog.entry(id)
   end
 
-  def self.entry(id : String) : Weakness | Category | View | Nil
+  def self.entry(id : String) : Weakness | Category | View?
     catalog.entry(id)
   end
 

@@ -279,7 +279,7 @@ module CWE
 
     private def self.s(j, k) : String?
       v = j[k]?
-      return nil unless v
+      return unless v
       str = v.as_s?
       str.try(&.empty?) ? nil : str
     end
@@ -303,15 +303,15 @@ module CWE
 
     private def self.parse_platform(x) : ApplicablePlatform
       keys = x.as_h.keys
-      kind, prefix = if keys.any? { |k| k.starts_with?("language") }
+      kind, prefix = if keys.any?(&.starts_with?("language"))
                        {"Language", "language"}
-                     elsif keys.any? { |k| k.starts_with?("technology") }
+                     elsif keys.any?(&.starts_with?("technology"))
                        {"Technology", "technology"}
-                     elsif keys.any? { |k| k.starts_with?("operating_system") }
+                     elsif keys.any?(&.starts_with?("operating_system"))
                        {"OperatingSystem", "operating_system"}
-                     elsif keys.any? { |k| k.starts_with?("architecture") }
+                     elsif keys.any?(&.starts_with?("architecture"))
                        {"Architecture", "architecture"}
-                     elsif keys.any? { |k| k.starts_with?("paradigm") }
+                     elsif keys.any?(&.starts_with?("paradigm"))
                        {"Paradigm", "paradigm"}
                      else
                        {"Unknown", "unknown"}
@@ -550,11 +550,11 @@ module CWE
     # Look up any entry by id — returns a `Weakness`, `Category`, or `View`
     # (in that order of preference). Useful when you don't know up front
     # which kind of CWE entity a given id refers to.
-    def entry(id : Int) : Weakness | Category | View | Nil
+    def entry(id : Int) : Weakness | Category | View?
       find(id) || category(id) || view(id)
     end
 
-    def entry(id : String) : Weakness | Category | View | Nil
+    def entry(id : String) : Weakness | Category | View?
       find(id) || category(id) || view(id)
     end
 
@@ -594,7 +594,7 @@ module CWE
       if v = view_id
         rels = rels.select { |r| r.view_id == v.to_i32 }
       end
-      rels.compact_map { |r| find(r.cwe_id) }.uniq
+      rels.compact_map { |r| find(r.cwe_id) }.uniq!
     end
 
     # Direct children of `id`. Resolved via the pre-built children index in
@@ -626,7 +626,7 @@ module CWE
           result << w
         end
         frontier = frontier.flat_map { |w| parents_of(w.id, view_id) }
-          .reject { |w| seen.includes?(w.id) }.uniq
+          .reject { |w| seen.includes?(w.id) }.uniq!
         depth += 1
       end
       result
@@ -645,7 +645,7 @@ module CWE
           result << w
         end
         frontier = frontier.flat_map { |w| children_of(w.id, view_id) }
-          .reject { |w| seen.includes?(w.id) }.uniq
+          .reject { |w| seen.includes?(w.id) }.uniq!
         depth += 1
       end
       result
@@ -657,7 +657,7 @@ module CWE
     # `Pillar`, that is returned; otherwise the most distant ancestor is
     # returned (some chains topple out at a `Class` rather than a `Pillar`).
     def pillar_of(id : Int) : Weakness?
-      w = find(id) || return nil
+      w = find(id) || return
       return w if w.abstraction == Abstraction::Pillar
       chain = ancestors_of(id)
       chain.reverse.find { |a| a.abstraction == Abstraction::Pillar } ||
@@ -679,7 +679,7 @@ module CWE
     def search_by_name(query : String) : Array(Weakness)
       q = query.downcase.strip
       return [] of Weakness if q.empty?
-      @sorted.select { |w| w.name.downcase.includes?(q) }
+      @sorted.select(&.name.downcase.includes?(q))
     end
 
     private def matches?(w : Weakness, q : String) : Bool

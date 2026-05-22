@@ -130,7 +130,7 @@ module CWE
 
     # OWASP entries in `taxonomy_mappings`.
     def owasp_mappings : Array(TaxonomyMapping)
-      @taxonomy_mappings.select { |t| t.taxonomy_name.starts_with?("OWASP") }
+      @taxonomy_mappings.select(&.taxonomy_name.starts_with?("OWASP"))
     end
 
     # CAPEC IDs this weakness is mapped to (Common Attack Pattern Enumeration).
