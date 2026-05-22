@@ -113,7 +113,7 @@ describe CWE do
     end
 
     it "exposes parent relationships via ChildOf edges" do
-      parents = CWE.find!(79).parent_relations.map(&.cwe_id).uniq
+      parents = CWE.find!(79).parent_relations.map(&.cwe_id).uniq!
       parents.should contain(74)
     end
   end
@@ -324,8 +324,8 @@ describe CWE do
     end
 
     it "filters children_of by view id" do
-      kids_all = CWE.children_of(79).map(&.id).sort
-      kids_1000 = CWE.children_of(79, view_id: 1000).map(&.id).sort
+      kids_all = CWE.children_of(79).map(&.id).sort!
+      kids_1000 = CWE.children_of(79, view_id: 1000).map(&.id).sort!
       kids_1000.should eq(kids_all) # children all live in view 1000 too
       CWE.children_of(79, view_id: 9999).should be_empty
     end
@@ -360,7 +360,7 @@ describe CWE do
 
     it "emits relatedAttackPatterns as an int array" do
       j = JSON.parse(CWE.find!(79).to_json).as_h
-      j["relatedAttackPatterns"].as_a.all? { |x| x.as_i? }.should be_true
+      j["relatedAttackPatterns"].as_a.all?(&.as_i?).should be_true
     end
   end
 

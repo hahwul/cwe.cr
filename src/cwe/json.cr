@@ -236,7 +236,7 @@ module CWE
         end
         unless @reasons.empty?
           json.field "reasons" do
-            json.array { @reasons.each { |r| json.string(r) } }
+            json.array { @reasons.each { |reason| json.string(reason) } }
           end
         end
         unless @suggestions.empty?

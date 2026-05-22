@@ -320,7 +320,7 @@ while csv.next
 end
 
 # Sort by ID for stable diffs
-weaknesses.sort_by! { |h| h["id"].as_i64 }
+weaknesses.sort_by!(&.["id"].as_i64)
 
 # Catalog version is detected from, in order:
 #   1. $CWE_CATALOG_VERSION env var
@@ -741,8 +741,8 @@ weaknesses.each do |w|
   extras.each { |k, v| w[k] = v }
 end
 
-categories.sort_by! { |h| h["id"].as_i64 }
-views.sort_by! { |h| h["id"].as_i64 }
+categories.sort_by!(&.["id"].as_i64)
+views.sort_by!(&.["id"].as_i64)
 
 top = {} of String => JSON::Any
 top["catalog_version"] = JSON::Any.new(meta_version)
