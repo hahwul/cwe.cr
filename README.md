@@ -54,7 +54,7 @@ Each `CWE::Weakness` exposes:
 |---|---|
 | `id`, `cwe_id`, `url` | `Int32`, `"CWE-79"`, `https://...` |
 | `name` | `String` |
-| `abstraction` | `CWE::Abstraction` (`Pillar`, `Class`, `Base`, `Variant`, `Compound`) |
+| `abstraction` | `CWE::Abstraction` (`Pillar`, `Class`, `Base`, `Variant`) |
 | `structure` | `CWE::Structure` (`Simple`, `Composite`, `Chain`) |
 | `status` | `CWE::Status` (`Stable`, `Draft`, `Incomplete`, `Deprecated`, …) |
 | `description`, `extended_description` | `String?` |

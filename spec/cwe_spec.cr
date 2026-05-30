@@ -27,6 +27,13 @@ describe CWE do
       CWE.parse_id?("CWE-abc").should be_nil
       CWE.parse_id?("CWE-12a").should be_nil
     end
+
+    it "rejects the non-canonical separator-less form" do
+      # "CWE79" (no separator between the prefix and the number) is not a
+      # canonical CWE id and must not be accepted.
+      CWE.parse_id?("CWE79").should be_nil
+      CWE.parse_id?("cwe79").should be_nil
+    end
   end
 
   describe ".parse_id" do
@@ -260,6 +267,16 @@ describe CWE do
       cat = CWE::Catalog.from_json(doc)
       cat.size.should eq(1)
       cat.find!(79).name.should eq("Test entry")
+    end
+
+    it "raises a CWE::Error (not a raw KeyError) when 'weaknesses' is missing" do
+      doc = {
+        "catalog_version" => "1.0",
+        "generated_at"    => "2026-01-01T00:00:00Z",
+      }.to_json
+      expect_raises(CWE::Error, /missing required "weaknesses"/) do
+        CWE::Catalog.from_json(doc)
+      end
     end
   end
 

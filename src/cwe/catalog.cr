@@ -98,7 +98,9 @@ module CWE
       version = doc["catalog_version"]?.try(&.as_s) || "unknown"
       generated = doc["generated_at"]?.try(&.as_s) || ""
 
-      ws = doc["weaknesses"].as_a.map { |w| weakness_from_json(w) }
+      weaknesses_node = doc["weaknesses"]? ||
+                        raise CWE::Error.new("malformed CWE document: missing required \"weaknesses\" key")
+      ws = weaknesses_node.as_a.map { |w| weakness_from_json(w) }
       cats = doc["categories"]?.try(&.as_a.map { |c| category_from_json(c) }) || [] of Category
       vws = doc["views"]?.try(&.as_a.map { |v| view_from_json(v) }) || [] of View
       ers = doc["external_references"]?.try(&.as_a.map { |r| external_reference_from_json(r) }) ||

@@ -29,7 +29,7 @@ module CWE
     s = input.strip
     return if s.empty?
 
-    if md = /\A[Cc][Ww][Ee][-_:\s]?(\d+)\z/.match(s)
+    if md = /\A[Cc][Ww][Ee][-_:\s]+(\d+)\z/.match(s)
       md[1].to_i?
     elsif md = /\A(\d+)\z/.match(s)
       md[1].to_i?
