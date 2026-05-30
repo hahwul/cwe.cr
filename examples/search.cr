@@ -21,7 +21,7 @@ end
 
 puts "\n--- Counts by abstraction ---"
 {CWE::Abstraction::Pillar, CWE::Abstraction::Class, CWE::Abstraction::Base,
- CWE::Abstraction::Variant, CWE::Abstraction::Compound}.each do |level|
+ CWE::Abstraction::Variant}.each do |level|
   puts "  #{level.to_s.ljust(10)} #{CWE.with_abstraction(level).size}"
 end
 
