@@ -9,28 +9,25 @@ module CWE
     Class
     Base
     Variant
-    Compound
     Other
 
     def self.parse_label(s : String?) : Abstraction
       case s.try(&.strip).try(&.downcase)
-      when "pillar"   then Pillar
-      when "class"    then Class
-      when "base"     then Base
-      when "variant"  then Variant
-      when "compound" then Compound
-      else                 Other
+      when "pillar"  then Pillar
+      when "class"   then Class
+      when "base"    then Base
+      when "variant" then Variant
+      else                Other
       end
     end
 
     def to_s : String
       case self
-      in Pillar   then "Pillar"
-      in Class    then "Class"
-      in Base     then "Base"
-      in Variant  then "Variant"
-      in Compound then "Compound"
-      in Other    then "Other"
+      in Pillar  then "Pillar"
+      in Class   then "Class"
+      in Base    then "Base"
+      in Variant then "Variant"
+      in Other   then "Other"
       end
     end
 
