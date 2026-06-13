@@ -1,5 +1,15 @@
 require "./spec_helper"
 
+# Helper: wrap a list of (possibly malformed) weakness hashes in an otherwise
+# well-formed top-level Catalog document for the hardening specs below.
+private def malformed_catalog_doc(weaknesses)
+  {
+    "catalog_version" => "1.0",
+    "generated_at"    => "2026-01-01T00:00:00Z",
+    "weaknesses"      => weaknesses,
+  }
+end
+
 describe CWE do
   it "exposes a version constant" do
     CWE::VERSION.should be_a(String)
@@ -577,6 +587,134 @@ describe CWE do
 
     it "returns nil for an unknown id" do
       CWE.entry(999_999).should be_nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Malformed-input hardening (stability regressions)
+  #
+  # Every malformed Catalog.from_json document below used to surface a bare
+  # KeyError or TypeCastError. Required fields must now raise a wrapped
+  # CWE::Error; optional/repeated fields must parse gracefully (skipping the
+  # offending element) instead of crashing.
+  # ---------------------------------------------------------------------------
+  describe "Catalog.from_json malformed-input hardening" do
+    it "raises CWE::Error when 'weaknesses' is not an array" do
+      doc = {
+        "catalog_version" => "1.0",
+        "generated_at"    => "2026-01-01T00:00:00Z",
+        "weaknesses"      => "nope",
+      }.to_json
+      expect_raises(CWE::Error, /"weaknesses" must be an array/) do
+        CWE::Catalog.from_json(doc)
+      end
+    end
+
+    it "raises CWE::Error (not KeyError) when a weakness is missing its id" do
+      doc = malformed_catalog_doc([{"name" => "No id here"}]).to_json
+      expect_raises(CWE::Error, /weakness missing id/) do
+        CWE::Catalog.from_json(doc)
+      end
+    end
+
+    it "raises CWE::Error (not TypeCastError) when a weakness id is non-integer" do
+      doc = malformed_catalog_doc([{"id" => "seventy-nine", "name" => "Bad id"}]).to_json
+      expect_raises(CWE::Error, /weakness missing id/) do
+        CWE::Catalog.from_json(doc)
+      end
+    end
+
+    it "defaults a missing/null weakness name to \"\" instead of raising" do
+      doc = malformed_catalog_doc([{"id" => 79}]).to_json
+      cat = CWE::Catalog.from_json(doc)
+      cat.find!(79).name.should eq("")
+
+      doc_null = malformed_catalog_doc([{"id" => 80, "name" => nil}]).to_json
+      cat_null = CWE::Catalog.from_json(doc_null)
+      cat_null.find!(80).name.should eq("")
+    end
+
+    it "raises CWE::Error (not KeyError) when a category is missing its id" do
+      doc = {
+        "catalog_version" => "1.0",
+        "generated_at"    => "2026-01-01T00:00:00Z",
+        "weaknesses"      => [] of JSON::Any,
+        "categories"      => [{"name" => "No id"}],
+      }.to_json
+      expect_raises(CWE::Error, /category missing id/) do
+        CWE::Catalog.from_json(doc)
+      end
+    end
+
+    it "raises CWE::Error (not KeyError) when a view is missing its id" do
+      doc = {
+        "catalog_version" => "1.0",
+        "generated_at"    => "2026-01-01T00:00:00Z",
+        "weaknesses"      => [] of JSON::Any,
+        "views"           => [{"name" => "No id"}],
+      }.to_json
+      expect_raises(CWE::Error, /view missing id/) do
+        CWE::Catalog.from_json(doc)
+      end
+    end
+
+    it "raises CWE::Error (not KeyError) when an external reference lacks reference_id" do
+      doc = {
+        "catalog_version"     => "1.0",
+        "generated_at"        => "2026-01-01T00:00:00Z",
+        "weaknesses"          => [] of JSON::Any,
+        "external_references" => [{"title" => "Citation with no id"}],
+      }.to_json
+      expect_raises(CWE::Error, /external reference missing reference_id/) do
+        CWE::Catalog.from_json(doc)
+      end
+    end
+
+    it "skips a non-object applicable_platforms element instead of crashing" do
+      doc = malformed_catalog_doc([{
+        "id"                   => 79,
+        "name"                 => "Platform test",
+        "applicable_platforms" => ["not-an-object", {"language_name" => "PHP"}],
+      }]).to_json
+      cat = CWE::Catalog.from_json(doc)
+      platforms = cat.find!(79).applicable_platforms
+      platforms.size.should eq(1)
+      platforms.first.name.should eq("PHP")
+    end
+
+    it "skips string elements in related_attack_patterns instead of crashing" do
+      doc = malformed_catalog_doc([{
+        "id"                      => 79,
+        "name"                    => "CAPEC test",
+        "related_attack_patterns" => [85, "not-an-int", 588],
+      }]).to_json
+      cat = CWE::Catalog.from_json(doc)
+      cat.find!(79).related_attack_patterns.should eq([85, 588])
+    end
+
+    it "treats a non-array related_attack_patterns as empty instead of crashing" do
+      doc = malformed_catalog_doc([{
+        "id"                      => 79,
+        "name"                    => "CAPEC test",
+        "related_attack_patterns" => "85",
+      }]).to_json
+      cat = CWE::Catalog.from_json(doc)
+      cat.find!(79).related_attack_patterns.should be_empty
+    end
+
+    it "skips a non-object mapping suggestion instead of crashing" do
+      doc = malformed_catalog_doc([{
+        "id"            => 79,
+        "name"          => "Mapping test",
+        "mapping_notes" => {
+          "usage"       => "Allowed",
+          "suggestions" => ["not-an-object", {"cwe_id" => 89, "comment" => "ok"}],
+        },
+      }]).to_json
+      cat = CWE::Catalog.from_json(doc)
+      notes = cat.find!(79).mapping_notes.not_nil!
+      notes.suggestions.size.should eq(1)
+      notes.suggestions.first.cwe_id.should eq(89)
     end
   end
 end
