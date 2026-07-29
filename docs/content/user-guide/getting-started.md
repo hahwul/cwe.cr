@@ -8,7 +8,7 @@ weight = 1
 
 | Requirement | Version    |
 |-------------|------------|
-| Crystal     | >= 1.20.2  |
+| Crystal     | >= 1.21.0  |
 
 cwe.cr is pure Crystal with no native dependencies. The MITRE CWE catalog
 is embedded directly into the resulting binary — no runtime data files,
