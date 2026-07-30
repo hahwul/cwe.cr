@@ -80,7 +80,7 @@ module CWE
 
       @external_refs_by_id = {} of String => ExternalReference
       external_references.each { |r| @external_refs_by_id[canonical_ref_id(r.reference_id)] = r }
-      @sorted_external_refs = @external_refs_by_id.values.sort_by { |r| ref_sort_key(r.reference_id) }
+      @sorted_external_refs = @external_refs_by_id.values.sort_by! { |r| ref_sort_key(r.reference_id) }
 
       @children_index = Hash(Int32, Array(Weakness)).new { |h, k| h[k] = [] of Weakness }
       @sorted.each do |w|
