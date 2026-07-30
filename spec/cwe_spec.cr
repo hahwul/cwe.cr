@@ -367,6 +367,53 @@ describe CWE do
     end
   end
 
+  describe "duplicate ids in a source document" do
+    # Bug: the sorted lists were built from the input arrays while lookups
+    # went through the id maps, so a repeated id made `size`/`all` disagree
+    # with `find` — and left the children index pointing at the shadowed
+    # object that `find` would never return.
+    doc = {
+      "weaknesses" => [
+        {"id" => 79, "name" => "First", "related_weaknesses" => [
+          {"nature" => "ChildOf", "cwe_id" => 74},
+        ]},
+        {"id" => 74, "name" => "Parent"},
+        {"id" => 20, "name" => "Other parent"},
+        {"id" => 79, "name" => "Second", "related_weaknesses" => [
+          {"nature" => "ChildOf", "cwe_id" => 20},
+        ]},
+      ],
+      "categories" => [{"id" => 227, "name" => "A"}, {"id" => 227, "name" => "B"}],
+      "views"      => [{"id" => 1000, "name" => "V1"}, {"id" => 1000, "name" => "V2"}],
+    }.to_json
+
+    it "keeps size/all consistent with find (last occurrence wins)" do
+      cat = CWE::Catalog.from_json(doc)
+      cat.size.should eq(3)
+      cat.all.map(&.id).should eq([20, 74, 79])
+      cat.all.find(&.id.==(79)).should be(cat.find!(79))
+      cat.find!(79).name.should eq("Second")
+    end
+
+    it "de-duplicates categories and views too" do
+      cat = CWE::Catalog.from_json(doc)
+      cat.category_count.should eq(1)
+      cat.all_categories.map(&.name).should eq(["B"])
+      cat.view_count.should eq(1)
+      cat.all_views.map(&.name).should eq(["V2"])
+    end
+
+    it "indexes children from the winning entry's edges only" do
+      cat = CWE::Catalog.from_json(doc)
+      # The shadowed "First" declared ChildOf 74; only "Second"'s ChildOf 20
+      # edge is real, because "Second" is what `find(79)` returns.
+      cat.children_of(74).should be_empty
+      kids = cat.children_of(20)
+      kids.map(&.id).should eq([79])
+      kids.first.name.should eq("Second")
+    end
+  end
+
   describe "collection accessors return copies" do
     # Bug: `children_of` handed back the pre-built index bucket itself, so a
     # caller mutating the result silently corrupted the catalog for the rest

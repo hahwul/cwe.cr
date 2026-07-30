@@ -61,21 +61,26 @@ module CWE
                    categories : Array(Category) = [] of Category,
                    views : Array(View) = [] of View,
                    external_references : Array(ExternalReference) = [] of ExternalReference)
+      # Each sorted list is derived from its id map rather than from the
+      # input array, so a document that repeats an id cannot leave the two
+      # disagreeing: `size`/`all`/`each` and `find` always see the same set,
+      # and the children index below is built only from reachable entries.
+      # On a duplicate the last occurrence wins.
       @by_id = {} of Int32 => Weakness
       weaknesses.each { |w| @by_id[w.id] = w }
-      @sorted = weaknesses.sort
+      @sorted = @by_id.values.sort!
 
       @categories_by_id = {} of Int32 => Category
       categories.each { |c| @categories_by_id[c.id] = c }
-      @sorted_categories = categories.sort
+      @sorted_categories = @categories_by_id.values.sort!
 
       @views_by_id = {} of Int32 => View
       views.each { |v| @views_by_id[v.id] = v }
-      @sorted_views = views.sort
+      @sorted_views = @views_by_id.values.sort!
 
       @external_refs_by_id = {} of String => ExternalReference
       external_references.each { |r| @external_refs_by_id[r.reference_id] = r }
-      @sorted_external_refs = external_references.sort_by(&.reference_id)
+      @sorted_external_refs = @external_refs_by_id.values.sort_by(&.reference_id)
 
       @children_index = Hash(Int32, Array(Weakness)).new { |h, k| h[k] = [] of Weakness }
       @sorted.each do |w|
