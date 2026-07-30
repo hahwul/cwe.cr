@@ -332,6 +332,41 @@ describe CWE do
     end
   end
 
+  describe "out-of-range integer ids" do
+    # Bug: every `Int`-keyed lookup narrowed with `to_i32`, so an id outside
+    # the Int32 range raised OverflowError instead of reporting a miss.
+    big = 3_000_000_000_i64
+
+    it "reports a miss instead of raising OverflowError" do
+      CWE.find(big).should be_nil
+      CWE[big]?.should be_nil
+      CWE.includes?(big).should be_false
+      CWE.category(big).should be_nil
+      CWE.view(big).should be_nil
+      CWE.entry(big).should be_nil
+      CWE.pillar_of(big).should be_nil
+    end
+
+    it "returns empty relationship sets instead of raising" do
+      CWE.parents_of(big).should be_empty
+      CWE.children_of(big).should be_empty
+      CWE.ancestors_of(big).should be_empty
+      CWE.descendants_of(big).should be_empty
+      CWE.members_of(big).should be_empty
+    end
+
+    it "treats an out-of-range view_id as matching no edge" do
+      CWE.parents_of(79, view_id: big).should be_empty
+      CWE.children_of(79, view_id: big).should be_empty
+    end
+
+    it "still raises NotFoundError (not OverflowError) from bang lookups" do
+      expect_raises(CWE::NotFoundError) { CWE.find!(big) }
+      expect_raises(CWE::NotFoundError) { CWE.category!(big) }
+      expect_raises(CWE::NotFoundError) { CWE.view!(big) }
+    end
+  end
+
   describe "Catalog perf invariants" do
     it "children_of uses the pre-built index (constant-time lookup)" do
       # Sanity: 1000 calls should be effectively instant.

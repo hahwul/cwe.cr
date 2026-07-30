@@ -402,6 +402,15 @@ module CWE
 
     # ---------- Lookup ----------
 
+    # Narrow an arbitrary `Int` to the `Int32` the catalog is keyed by.
+    # Ids outside the `Int32` range (an `Int64` parsed from user input, say)
+    # simply cannot be in the catalog, so they yield nil here instead of
+    # raising `OverflowError` from `to_i32` — lookups keep their documented
+    # "returns nil / empty on a miss" contract for every `Int` input.
+    private def narrow_id(id : Int) : Int32?
+      id.to_i32 if Int32::MIN <= id && id <= Int32::MAX
+    end
+
     # Number of entries in the catalog.
     def size : Int32
       @sorted.size
@@ -419,7 +428,9 @@ module CWE
 
     # Find by integer id. Returns nil if not found.
     def find(id : Int) : Weakness?
-      @by_id[id.to_i32]?
+      if i = narrow_id(id)
+        @by_id[i]?
+      end
     end
 
     # Find by `"CWE-79"` / `"cwe-79"` / `"79"`. Returns nil if the string
@@ -459,7 +470,11 @@ module CWE
     end
 
     def includes?(id : Int) : Bool
-      @by_id.has_key?(id.to_i32)
+      if i = narrow_id(id)
+        @by_id.has_key?(i)
+      else
+        false
+      end
     end
 
     def includes?(id : String) : Bool
@@ -482,7 +497,9 @@ module CWE
     end
 
     def category(id : Int) : Category?
-      @categories_by_id[id.to_i32]?
+      if i = narrow_id(id)
+        @categories_by_id[i]?
+      end
     end
 
     def category(id : String) : Category?
@@ -511,7 +528,9 @@ module CWE
     end
 
     def view(id : Int) : View?
-      @views_by_id[id.to_i32]?
+      if i = narrow_id(id)
+        @views_by_id[i]?
+      end
     end
 
     def view(id : String) : View?
@@ -599,7 +618,8 @@ module CWE
       w = find(id) || return [] of Weakness
       rels = w.parent_relations
       if v = view_id
-        rels = rels.select { |r| r.view_id == v.to_i32 }
+        vid = narrow_id(v) || return [] of Weakness
+        rels = rels.select { |r| r.view_id == vid }
       end
       rels.compact_map { |r| find(r.cwe_id) }.uniq!
     end
@@ -608,11 +628,12 @@ module CWE
     # O(children); when `view_id` is given, only children whose `ChildOf`
     # edge belongs to that view are returned.
     def children_of(id : Int, view_id : Int? = nil) : Array(Weakness)
-      target = id.to_i32
+      target = narrow_id(id) || return [] of Weakness
       kids = @children_index[target]? || ([] of Weakness)
       if v = view_id
+        vid = narrow_id(v) || return [] of Weakness
         kids = kids.select do |w|
-          w.parent_relations.any? { |r| r.cwe_id == target && r.view_id == v.to_i32 }
+          w.parent_relations.any? { |r| r.cwe_id == target && r.view_id == vid }
         end
       end
       kids
