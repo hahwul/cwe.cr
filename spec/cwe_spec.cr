@@ -666,6 +666,27 @@ describe CWE do
       w.compound?.should be_false
     end
 
+    it "treats an absent Structure as Simple, matching the constructor" do
+      # Bug: parse_label(nil) yielded `Other` while the Weakness constructor
+      # defaulted to `Simple`, so the same entry differed depending on whether
+      # it came from a document or was built directly. MITRE's schema
+      # declares Structure with default="Simple".
+      CWE::Structure.parse_label(nil).should eq(CWE::Structure::Simple)
+      CWE::Structure.parse_label("").should eq(CWE::Structure::Simple)
+      CWE::Structure.parse_label("Nonsense").should eq(CWE::Structure::Other)
+
+      doc = {
+        "catalog_version" => "1.0",
+        "generated_at"    => "2026-01-01T00:00:00Z",
+        "weaknesses"      => [{"id" => 79, "name" => "No structure attribute"}],
+      }.to_json
+      parsed = CWE::Catalog.from_json(doc).find!(79)
+      parsed.structure.should eq(CWE::Weakness.new(id: 79, name: "x").structure)
+      parsed.structure.should eq(CWE::Structure::Simple)
+      parsed.raw_structure.should be_nil # the absence is still visible
+      parsed.compound?.should be_false
+    end
+
     it "marks at least one compound entry across the catalog" do
       compounds = CWE.all.select(&.compound?)
       compounds.should_not be_empty
@@ -709,6 +730,16 @@ describe CWE do
       examples.should_not be_empty
       examples.first.example_code.should_not be_empty
       examples.first.example_code.first.code.should_not be_empty
+    end
+
+    it "matches the README snippet (not every example carries code)" do
+      w = CWE.find!(89)
+      w.demonstrative_examples.first.example_code.should be_empty
+      ex = w.demonstrative_examples.find! { |e| !e.example_code.empty? }
+      ex.example_code.first.language.should eq("C#")
+      ex.example_code.first.nature.should eq("Bad")
+      w.demonstrative_examples.flat_map(&.example_code)
+        .select(&.nature.== "Bad").should_not be_empty
     end
 
     it "tags example code with language and nature where present" do

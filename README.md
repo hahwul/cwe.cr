@@ -100,13 +100,19 @@ CWE.category!(227).mapping_usage    # => CWE::MappingUsage::Prohibited
 
 ### Demonstrative examples
 
+Not every example carries code — some are prose only — so pick the ones
+that do:
+
 ```crystal
 w = CWE.find!(89)  # SQL Injection
-ex = w.demonstrative_examples.first
+ex = w.demonstrative_examples.find! { |e| !e.example_code.empty? }
 ex.intro_text                     # prose intro
-ex.example_code.first.language    # => "Java"
+ex.example_code.first.language    # => "C#"
 ex.example_code.first.nature      # => "Bad"
 ex.example_code.first.code        # the snippet
+
+# All the "Bad" samples across every example:
+w.demonstrative_examples.flat_map(&.example_code).select(&.nature.== "Bad")
 ```
 
 ### External references

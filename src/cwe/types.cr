@@ -66,8 +66,15 @@ module CWE
     Chain
     Other
 
+    # Unlike the other label enums, an *absent* structure is not unknown:
+    # MITRE's schema declares `Structure` with `default="Simple"`, so an
+    # entry that omits the attribute is Simple. Only a present-but-unfamiliar
+    # label maps to `Other`. This also keeps a `Weakness` parsed from a
+    # document without the field equal to one built through the constructor,
+    # whose `structure` parameter has always defaulted to `Simple`.
     def self.parse_label(s : String?) : Structure
       case s.try(&.strip).try(&.downcase)
+      when nil, ""     then Simple
       when "simple"    then Simple
       when "composite" then Composite
       when "chain"     then Chain
