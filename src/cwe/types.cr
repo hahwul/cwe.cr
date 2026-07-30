@@ -4,30 +4,38 @@ module CWE
   # CWE catalog defines a small fixed set of abstraction levels. We expose
   # them as an enum so callers can pattern-match against them; unknown values
   # (catalog drift, future MITRE releases) map to `Other`.
+  #
+  # `Compound` is a genuine member of MITRE's `AbstractionEnumeration`, not a
+  # synonym for `Structure`: the seven Compound entries (CWE-61, 352, 384,
+  # 680, 689, 690, 692) carry `Abstraction="Compound"` *and* a separate
+  # `Structure` of `Chain` or `Composite`.
   enum Abstraction
     Pillar
     Class
     Base
     Variant
+    Compound
     Other
 
     def self.parse_label(s : String?) : Abstraction
       case s.try(&.strip).try(&.downcase)
-      when "pillar"  then Pillar
-      when "class"   then Class
-      when "base"    then Base
-      when "variant" then Variant
-      else                Other
+      when "pillar"   then Pillar
+      when "class"    then Class
+      when "base"     then Base
+      when "variant"  then Variant
+      when "compound" then Compound
+      else                 Other
       end
     end
 
     def to_s : String
       case self
-      in Pillar  then "Pillar"
-      in Class   then "Class"
-      in Base    then "Base"
-      in Variant then "Variant"
-      in Other   then "Other"
+      in Pillar   then "Pillar"
+      in Class    then "Class"
+      in Base     then "Base"
+      in Variant  then "Variant"
+      in Compound then "Compound"
+      in Other    then "Other"
       end
     end
 

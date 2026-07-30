@@ -53,7 +53,7 @@ The full set of values is:
 | `Class`     | General weakness class             |
 | `Base`      | Concrete weakness, abstract enough to apply broadly |
 | `Variant`   | Concrete weakness tied to a specific resource or technology |
-| `Compound`  | Chain of weaknesses                |
+| `Compound`  | Chain or Composite of several weaknesses (see `structure`) |
 | `Other`     | Unknown / future label             |
 
 ## Filters by status

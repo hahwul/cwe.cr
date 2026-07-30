@@ -337,6 +337,25 @@ describe CWE do
       CWE.all.count { |w| !w.background_details.empty? }.should be > 0
     end
 
+    it "keeps Compound as a first-class Abstraction" do
+      # Bug: `Compound` had been dropped from the enum on the theory that it
+      # duplicated `Structure`. It does not — MITRE's AbstractionEnumeration
+      # lists it, and the seven affected entries carry both attributes. With
+      # it missing they degraded into `Other`, the unknown-label bucket.
+      CWE::Abstraction.parse_label("Compound").should eq(CWE::Abstraction::Compound)
+      CWE::Abstraction::Compound.to_s.should eq("Compound")
+
+      compounds = CWE.with_abstraction(CWE::Abstraction::Compound)
+      compounds.map(&.id).should eq([61, 352, 384, 680, 689, 690, 692])
+      compounds.all?(&.compound?).should be_true
+      compounds.map(&.structure).to_set.should eq(
+        Set{CWE::Structure::Composite, CWE::Structure::Chain}
+      )
+
+      # `Other` is reserved for labels the library does not know about.
+      CWE.with_abstraction(CWE::Abstraction::Other).should be_empty
+    end
+
     it "rejects integer-overflow CWE ids without crashing" do
       CWE.parse_id?("99999999999").should be_nil
       CWE.parse_id?("CWE-99999999999").should be_nil
