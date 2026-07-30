@@ -332,6 +332,30 @@ describe CWE do
     end
   end
 
+  describe "collection accessors return copies" do
+    # Bug: `children_of` handed back the pre-built index bucket itself, so a
+    # caller mutating the result silently corrupted the catalog for the rest
+    # of the process. Same for all/all_categories/all_views/external_references.
+    it "does not let a caller mutate the children index" do
+      before = CWE.children_of(79).size
+      before.should be > 0
+      CWE.children_of(79).clear
+      CWE.children_of(79).size.should eq(before)
+    end
+
+    it "hands out a fresh array from all/categories/views/external_references" do
+      CWE.all.same?(CWE.all).should be_false
+      CWE.categories.same?(CWE.categories).should be_false
+      CWE.views.same?(CWE.views).should be_false
+      CWE.external_references.same?(CWE.external_references).should be_false
+
+      size = CWE.size
+      CWE.all.clear
+      CWE.size.should eq(size)
+      CWE.all.size.should eq(size)
+    end
+  end
+
   describe "out-of-range integer ids" do
     # Bug: every `Int`-keyed lookup narrowed with `to_i32`, so an id outside
     # the Int32 range raised OverflowError instead of reporting a miss.

@@ -417,8 +417,12 @@ module CWE
     end
 
     # All weaknesses, sorted by numeric id.
+    #
+    # Returns a fresh array on each call — the catalog's own storage is never
+    # handed out, so a caller is free to sort/reject/clear the result without
+    # corrupting the catalog. Use `each` to iterate without the copy.
     def all : Array(Weakness)
-      @sorted
+      @sorted.dup
     end
 
     # Iterate over all entries in numeric-id order.
@@ -492,8 +496,9 @@ module CWE
       @sorted_categories.size
     end
 
+    # All categories, sorted by numeric id. Fresh array on each call, as `all`.
     def all_categories : Array(Category)
-      @sorted_categories
+      @sorted_categories.dup
     end
 
     def category(id : Int) : Category?
@@ -523,8 +528,9 @@ module CWE
       @sorted_views.size
     end
 
+    # All views, sorted by numeric id. Fresh array on each call, as `all`.
     def all_views : Array(View)
-      @sorted_views
+      @sorted_views.dup
     end
 
     def view(id : Int) : View?
@@ -553,7 +559,7 @@ module CWE
     # All catalog-level external references (citations), sorted by their
     # `Reference_ID` (e.g. `"REF-1"`, `"REF-10"`, …).
     def external_references : Array(ExternalReference)
-      @sorted_external_refs
+      @sorted_external_refs.dup
     end
 
     # Resolve a `Reference_ID` such as `"REF-2"` to its full citation. Returns
@@ -626,17 +632,18 @@ module CWE
 
     # Direct children of `id`. Resolved via the pre-built children index in
     # O(children); when `view_id` is given, only children whose `ChildOf`
-    # edge belongs to that view are returned.
+    # edge belongs to that view are returned. The returned array is a copy of
+    # the index bucket, so mutating it does not disturb the catalog.
     def children_of(id : Int, view_id : Int? = nil) : Array(Weakness)
       target = narrow_id(id) || return [] of Weakness
-      kids = @children_index[target]? || ([] of Weakness)
+      kids = @children_index[target]? || return [] of Weakness
       if v = view_id
         vid = narrow_id(v) || return [] of Weakness
-        kids = kids.select do |w|
+        return kids.select do |w|
           w.parent_relations.any? { |r| r.cwe_id == target && r.view_id == vid }
         end
       end
-      kids
+      kids.dup
     end
 
     # All ancestors (transitive closure of `ChildOf`), nearest first.
