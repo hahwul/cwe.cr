@@ -79,8 +79,8 @@ module CWE
       @sorted_views = @views_by_id.values.sort!
 
       @external_refs_by_id = {} of String => ExternalReference
-      external_references.each { |r| @external_refs_by_id[r.reference_id] = r }
-      @sorted_external_refs = @external_refs_by_id.values.sort_by(&.reference_id)
+      external_references.each { |r| @external_refs_by_id[canonical_ref_id(r.reference_id)] = r }
+      @sorted_external_refs = @external_refs_by_id.values.sort_by { |r| ref_sort_key(r.reference_id) }
 
       @children_index = Hash(Int32, Array(Weakness)).new { |h, k| h[k] = [] of Weakness }
       @sorted.each do |w|
@@ -622,16 +622,41 @@ module CWE
 
     # ---------- External references ----------
 
-    # All catalog-level external references (citations), sorted by their
-    # `Reference_ID` (e.g. `"REF-1"`, `"REF-10"`, …).
+    # MITRE cites everything as `REF-<n>`, but the published XML carries at
+    # least one typo: a citation whose `Reference_ID` is bare `"1300"`, with
+    # no `REF-1300` anywhere else in the registry. Canonicalising both the
+    # stored key and the query means the `REF-1300` form still resolves to
+    # it, and gives the registry a stable numeric order.
+    private def canonical_ref_id(id : String) : String
+      s = id.strip
+      if md = /\A(?:[Rr][Ee][Ff][-_: ]?)?(\d+)\z/.match(s)
+        "REF-#{md[1]}"
+      else
+        s
+      end
+    end
+
+    # Sorts `REF-2` before `REF-10` (plain string order does the reverse) and
+    # parks anything that isn't a numbered citation at the end.
+    private def ref_sort_key(id : String) : {Int32, String}
+      if (md = /\AREF-(\d+)\z/.match(canonical_ref_id(id))) && (n = md[1].to_i?)
+        {n, ""}
+      else
+        {Int32::MAX, id}
+      end
+    end
+
+    # All catalog-level external references (citations), in `Reference_ID`
+    # order (`REF-1`, `REF-2`, … `REF-10`, …).
     def external_references : Array(ExternalReference)
       @sorted_external_refs.dup
     end
 
     # Resolve a `Reference_ID` such as `"REF-2"` to its full citation. Returns
-    # nil if the id is not in the registry.
+    # nil if the id is not in the registry. The `REF-` prefix is optional and
+    # case-insensitive, so `"REF-2"`, `"ref-2"` and `"2"` are equivalent.
     def external_reference(id : String) : ExternalReference?
-      @external_refs_by_id[id]?
+      @external_refs_by_id[canonical_ref_id(id)]?
     end
 
     def external_reference!(id : String) : ExternalReference

@@ -735,6 +735,31 @@ describe CWE do
       ref.not_nil!.reference_id.should eq(first.external_reference_id)
     end
 
+    it "orders the registry numerically, not lexicographically" do
+      # Bug: a plain string sort put REF-10 before REF-2, and the one MITRE
+      # citation with a malformed id ("1300") ahead of REF-1.
+      ids = CWE.external_references.map(&.reference_id)
+      nums = ids.compact_map { |i| i[/\d+/]?.try(&.to_i) }
+      nums.should eq(nums.sort)
+      CWE.external_references.first.reference_id.should eq("REF-1")
+    end
+
+    it "resolves a citation whose source id is missing the REF- prefix" do
+      # MITRE ships one entry as Reference_ID="1300" with no REF-1300 record;
+      # both spellings must reach it.
+      ref = CWE.external_reference("REF-1300")
+      ref.should_not be_nil
+      ref.not_nil!.reference_id.should eq("1300")
+      CWE.external_reference("1300").should eq(ref)
+      CWE.external_reference("ref-1300").should eq(ref)
+    end
+
+    it "accepts the bare and lower-case forms of a normal id" do
+      ref = CWE.external_reference!("REF-2")
+      CWE.external_reference("2").should eq(ref)
+      CWE.external_reference("ref-2").should eq(ref)
+    end
+
     it "raises on unknown reference id via the bang variant" do
       expect_raises(CWE::NotFoundError) { CWE.external_reference!("REF-not-real") }
     end
