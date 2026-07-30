@@ -44,6 +44,22 @@ describe CWE do
       CWE.parse_id?("CWE79").should be_nil
       CWE.parse_id?("cwe79").should be_nil
     end
+
+    it "accepts a single space as the separator" do
+      CWE.parse_id?("CWE 79").should eq(79)
+    end
+
+    it "rejects embedded whitespace and repeated separators" do
+      # Bug: the separator class was `[-_:\s]+`, so newlines, tabs and runs
+      # of mixed separators all parsed as a canonical id.
+      CWE.parse_id?("CWE-\n79").should be_nil
+      CWE.parse_id?("CWE-\t79").should be_nil
+      CWE.parse_id?("CWE- 79").should be_nil
+      CWE.parse_id?("CWE--79").should be_nil
+      CWE.parse_id?("CWE-_:79").should be_nil
+      CWE.parse_id?("CWE  79").should be_nil
+      CWE.parse_id?("7 9").should be_nil
+    end
   end
 
   describe ".parse_id" do
@@ -321,6 +337,25 @@ describe CWE do
       CWE.all.count { |w| !w.background_details.empty? }.should be > 0
     end
 
+    it "keeps Compound as a first-class Abstraction" do
+      # Bug: `Compound` had been dropped from the enum on the theory that it
+      # duplicated `Structure`. It does not — MITRE's AbstractionEnumeration
+      # lists it, and the seven affected entries carry both attributes. With
+      # it missing they degraded into `Other`, the unknown-label bucket.
+      CWE::Abstraction.parse_label("Compound").should eq(CWE::Abstraction::Compound)
+      CWE::Abstraction::Compound.to_s.should eq("Compound")
+
+      compounds = CWE.with_abstraction(CWE::Abstraction::Compound)
+      compounds.map(&.id).should eq([61, 352, 384, 680, 689, 690, 692])
+      compounds.all?(&.compound?).should be_true
+      compounds.map(&.structure).to_set.should eq(
+        Set{CWE::Structure::Composite, CWE::Structure::Chain}
+      )
+
+      # `Other` is reserved for labels the library does not know about.
+      CWE.with_abstraction(CWE::Abstraction::Other).should be_empty
+    end
+
     it "rejects integer-overflow CWE ids without crashing" do
       CWE.parse_id?("99999999999").should be_nil
       CWE.parse_id?("CWE-99999999999").should be_nil
@@ -329,6 +364,112 @@ describe CWE do
     it "accepts a stripped, leading-zero, mixed-case id" do
       CWE.parse_id?("0079").should eq(79)
       CWE.parse_id?("  Cwe-79  ").should eq(79)
+    end
+  end
+
+  describe "duplicate ids in a source document" do
+    # Bug: the sorted lists were built from the input arrays while lookups
+    # went through the id maps, so a repeated id made `size`/`all` disagree
+    # with `find` — and left the children index pointing at the shadowed
+    # object that `find` would never return.
+    doc = {
+      "weaknesses" => [
+        {"id" => 79, "name" => "First", "related_weaknesses" => [
+          {"nature" => "ChildOf", "cwe_id" => 74},
+        ]},
+        {"id" => 74, "name" => "Parent"},
+        {"id" => 20, "name" => "Other parent"},
+        {"id" => 79, "name" => "Second", "related_weaknesses" => [
+          {"nature" => "ChildOf", "cwe_id" => 20},
+        ]},
+      ],
+      "categories" => [{"id" => 227, "name" => "A"}, {"id" => 227, "name" => "B"}],
+      "views"      => [{"id" => 1000, "name" => "V1"}, {"id" => 1000, "name" => "V2"}],
+    }.to_json
+
+    it "keeps size/all consistent with find (last occurrence wins)" do
+      cat = CWE::Catalog.from_json(doc)
+      cat.size.should eq(3)
+      cat.all.map(&.id).should eq([20, 74, 79])
+      cat.all.find(&.id.==(79)).should be(cat.find!(79))
+      cat.find!(79).name.should eq("Second")
+    end
+
+    it "de-duplicates categories and views too" do
+      cat = CWE::Catalog.from_json(doc)
+      cat.category_count.should eq(1)
+      cat.all_categories.map(&.name).should eq(["B"])
+      cat.view_count.should eq(1)
+      cat.all_views.map(&.name).should eq(["V2"])
+    end
+
+    it "indexes children from the winning entry's edges only" do
+      cat = CWE::Catalog.from_json(doc)
+      # The shadowed "First" declared ChildOf 74; only "Second"'s ChildOf 20
+      # edge is real, because "Second" is what `find(79)` returns.
+      cat.children_of(74).should be_empty
+      kids = cat.children_of(20)
+      kids.map(&.id).should eq([79])
+      kids.first.name.should eq("Second")
+    end
+  end
+
+  describe "collection accessors return copies" do
+    # Bug: `children_of` handed back the pre-built index bucket itself, so a
+    # caller mutating the result silently corrupted the catalog for the rest
+    # of the process. Same for all/all_categories/all_views/external_references.
+    it "does not let a caller mutate the children index" do
+      before = CWE.children_of(79).size
+      before.should be > 0
+      CWE.children_of(79).clear
+      CWE.children_of(79).size.should eq(before)
+    end
+
+    it "hands out a fresh array from all/categories/views/external_references" do
+      CWE.all.same?(CWE.all).should be_false
+      CWE.categories.same?(CWE.categories).should be_false
+      CWE.views.same?(CWE.views).should be_false
+      CWE.external_references.same?(CWE.external_references).should be_false
+
+      size = CWE.size
+      CWE.all.clear
+      CWE.size.should eq(size)
+      CWE.all.size.should eq(size)
+    end
+  end
+
+  describe "out-of-range integer ids" do
+    # Bug: every `Int`-keyed lookup narrowed with `to_i32`, so an id outside
+    # the Int32 range raised OverflowError instead of reporting a miss.
+    big = 3_000_000_000_i64
+
+    it "reports a miss instead of raising OverflowError" do
+      CWE.find(big).should be_nil
+      CWE[big]?.should be_nil
+      CWE.includes?(big).should be_false
+      CWE.category(big).should be_nil
+      CWE.view(big).should be_nil
+      CWE.entry(big).should be_nil
+      CWE.pillar_of(big).should be_nil
+    end
+
+    it "returns empty relationship sets instead of raising" do
+      CWE.parents_of(big).should be_empty
+      CWE.children_of(big).should be_empty
+      CWE.ancestors_of(big).should be_empty
+      CWE.descendants_of(big).should be_empty
+      CWE.members_of(big).should be_empty
+    end
+
+    it "treats an out-of-range view_id as matching no edge" do
+      CWE.parents_of(79, view_id: big).should be_empty
+      CWE.children_of(79, view_id: big).should be_empty
+    end
+
+    it "still raises NotFoundError (not OverflowError) from bang lookups" do
+      expect_raises(CWE::NotFoundError) { CWE.find!(big) }
+      expect_raises(CWE::NotFoundError) { CWE.category!(big) }
+      expect_raises(CWE::NotFoundError) { CWE.view!(big) }
     end
   end
 
@@ -358,6 +499,44 @@ describe CWE do
     end
   end
 
+  describe "string ids across the traversal API" do
+    # Gap: find/category/view/entry accepted "CWE-79", but every traversal
+    # helper was Int-only, so a caller holding the string form had to convert
+    # by hand.
+    it "accepts the same id forms as find" do
+      %w[79 CWE-79 cwe-79].each do |key|
+        CWE.parents_of(key).map(&.id).should eq(CWE.parents_of(79).map(&.id))
+        CWE.children_of(key).map(&.id).should eq(CWE.children_of(79).map(&.id))
+        CWE.ancestors_of(key).map(&.id).should eq(CWE.ancestors_of(79).map(&.id))
+        CWE.descendants_of(key).map(&.id).should eq(CWE.descendants_of(79).map(&.id))
+        CWE.pillar_of(key).should eq(CWE.pillar_of(79))
+      end
+      CWE.members_of("CWE-1000").map(&.id).should eq(CWE.members_of(1000).map(&.id))
+    end
+
+    it "honours view_id with a string id" do
+      CWE.parents_of("CWE-79", view_id: 1000).map(&.id).should eq([74])
+      CWE.parents_of("CWE-79", view_id: 9999).should be_empty
+    end
+
+    it "treats an unparseable id as a miss" do
+      CWE.parents_of("not-a-cwe").should be_empty
+      CWE.children_of("not-a-cwe").should be_empty
+      CWE.ancestors_of("not-a-cwe").should be_empty
+      CWE.descendants_of("not-a-cwe").should be_empty
+      CWE.members_of("not-a-cwe").should be_empty
+      CWE.pillar_of("not-a-cwe").should be_nil
+    end
+
+    it "exposes max_depth on the module-level walks" do
+      # Bug: Catalog#ancestors_of/#descendants_of took max_depth, but the
+      # CWE.* delegations dropped it, so it could not be reached at all.
+      CWE.ancestors_of(79, max_depth: 1).map(&.id).should eq(CWE.parents_of(79).map(&.id))
+      CWE.descendants_of(79, max_depth: 1).map(&.id).should eq(CWE.children_of(79).map(&.id))
+      CWE.ancestors_of(79, max_depth: 1).size.should be < CWE.ancestors_of(79).size
+    end
+  end
+
   describe "pillar_of edge cases" do
     it "returns the entry itself when it is already a Pillar" do
       CWE.pillar_of(284).try(&.id).should eq(284)
@@ -383,6 +562,42 @@ describe CWE do
       first_tax = j["taxonomyMappings"].as_a.first.as_h
       first_tax.has_key?("taxonomyName").should be_true
       first_tax.has_key?("taxonomy_name").should be_false
+    end
+
+    it "serializes label enums the same way standalone as inside an entry" do
+      # Bug: Crystal's default Enum#to_json emits the underscored member name,
+      # so `w.abstraction.to_json` was "base" while `w.to_json["abstraction"]`
+      # was "Base".
+      CWE::Abstraction::Base.to_json.should eq(%("Base"))
+      CWE::Abstraction::Compound.to_json.should eq(%("Compound"))
+      CWE::Status::Stable.to_json.should eq(%("Stable"))
+      CWE::Structure::Simple.to_json.should eq(%("Simple"))
+      CWE::MappingUsage::AllowedWithReview.to_json.should eq(%("Allowed-with-Review"))
+
+      w = CWE.find!(79)
+      j = JSON.parse(w.to_json).as_h
+      j["abstraction"].as_s.should eq(w.abstraction.to_json.strip('"'))
+      j["status"].as_s.should eq(w.status.to_json.strip('"'))
+    end
+
+    it "reads label enums back, tolerating unknown labels" do
+      CWE::Abstraction.from_json(%("Base")).should eq(CWE::Abstraction::Base)
+      CWE::MappingUsage.from_json(%("Allowed-with-Review"))
+        .should eq(CWE::MappingUsage::AllowedWithReview)
+      CWE::Status.from_json(%("Some-Future-Label")).should eq(CWE::Status::Other)
+    end
+
+    it "round-trips MappingNotes through its own JSON shape" do
+      # Bug: to_json omits empty reasons/suggestions, but from_json required
+      # them — the library could not read back what it had just written.
+      original = CWE.find!(79).mapping_notes.not_nil!
+      CWE::MappingNotes.from_json(original.to_json).usage.should eq(original.usage)
+
+      bare = CWE::MappingNotes.new(usage: CWE::MappingUsage::AllowedWithReview)
+      restored = CWE::MappingNotes.from_json(bare.to_json)
+      restored.usage.should eq(CWE::MappingUsage::AllowedWithReview)
+      restored.reasons.should be_empty
+      restored.suggestions.should be_empty
     end
 
     it "emits relatedAttackPatterns as an int array" do
@@ -451,6 +666,27 @@ describe CWE do
       w.compound?.should be_false
     end
 
+    it "treats an absent Structure as Simple, matching the constructor" do
+      # Bug: parse_label(nil) yielded `Other` while the Weakness constructor
+      # defaulted to `Simple`, so the same entry differed depending on whether
+      # it came from a document or was built directly. MITRE's schema
+      # declares Structure with default="Simple".
+      CWE::Structure.parse_label(nil).should eq(CWE::Structure::Simple)
+      CWE::Structure.parse_label("").should eq(CWE::Structure::Simple)
+      CWE::Structure.parse_label("Nonsense").should eq(CWE::Structure::Other)
+
+      doc = {
+        "catalog_version" => "1.0",
+        "generated_at"    => "2026-01-01T00:00:00Z",
+        "weaknesses"      => [{"id" => 79, "name" => "No structure attribute"}],
+      }.to_json
+      parsed = CWE::Catalog.from_json(doc).find!(79)
+      parsed.structure.should eq(CWE::Weakness.new(id: 79, name: "x").structure)
+      parsed.structure.should eq(CWE::Structure::Simple)
+      parsed.raw_structure.should be_nil # the absence is still visible
+      parsed.compound?.should be_false
+    end
+
     it "marks at least one compound entry across the catalog" do
       compounds = CWE.all.select(&.compound?)
       compounds.should_not be_empty
@@ -496,6 +732,16 @@ describe CWE do
       examples.first.example_code.first.code.should_not be_empty
     end
 
+    it "matches the README snippet (not every example carries code)" do
+      w = CWE.find!(89)
+      w.demonstrative_examples.first.example_code.should be_empty
+      ex = w.demonstrative_examples.find! { |e| !e.example_code.empty? }
+      ex.example_code.first.language.should eq("C#")
+      ex.example_code.first.nature.should eq("Bad")
+      w.demonstrative_examples.flat_map(&.example_code)
+        .select(&.nature.== "Bad").should_not be_empty
+    end
+
     it "tags example code with language and nature where present" do
       examples = CWE.find!(89).demonstrative_examples
       examples.should_not be_empty
@@ -518,6 +764,31 @@ describe CWE do
       ref = CWE.external_reference(first.external_reference_id)
       ref.should_not be_nil
       ref.not_nil!.reference_id.should eq(first.external_reference_id)
+    end
+
+    it "orders the registry numerically, not lexicographically" do
+      # Bug: a plain string sort put REF-10 before REF-2, and the one MITRE
+      # citation with a malformed id ("1300") ahead of REF-1.
+      ids = CWE.external_references.map(&.reference_id)
+      nums = ids.compact_map { |i| i[/\d+/]?.try(&.to_i) }
+      nums.should eq(nums.sort)
+      CWE.external_references.first.reference_id.should eq("REF-1")
+    end
+
+    it "resolves a citation whose source id is missing the REF- prefix" do
+      # MITRE ships one entry as Reference_ID="1300" with no REF-1300 record;
+      # both spellings must reach it.
+      ref = CWE.external_reference("REF-1300")
+      ref.should_not be_nil
+      ref.not_nil!.reference_id.should eq("1300")
+      CWE.external_reference("1300").should eq(ref)
+      CWE.external_reference("ref-1300").should eq(ref)
+    end
+
+    it "accepts the bare and lower-case forms of a normal id" do
+      ref = CWE.external_reference!("REF-2")
+      CWE.external_reference("2").should eq(ref)
+      CWE.external_reference("ref-2").should eq(ref)
     end
 
     it "raises on unknown reference id via the bang variant" do
@@ -700,6 +971,98 @@ describe CWE do
       }]).to_json
       cat = CWE::Catalog.from_json(doc)
       cat.find!(79).related_attack_patterns.should be_empty
+    end
+
+    it "raises CWE::Error when the top level is not an object" do
+      expect_raises(CWE::Error, /top level must be an object/) do
+        CWE::Catalog.from_json("[]")
+      end
+    end
+
+    it "raises CWE::Error when categories/views/external_references are not arrays" do
+      {"categories", "views", "external_references"}.each do |key|
+        doc = {"weaknesses" => [] of JSON::Any, key => "nope"}.to_json
+        expect_raises(CWE::Error, /"#{key}" must be an array/) do
+          CWE::Catalog.from_json(doc)
+        end
+      end
+    end
+
+    it "raises CWE::Error (not a bare Exception) for non-object entries" do
+      expect_raises(CWE::Error, /each weakness must be an object/) do
+        CWE::Catalog.from_json(malformed_catalog_doc([1, 2, 3]).to_json)
+      end
+      expect_raises(CWE::Error, /each category must be an object/) do
+        CWE::Catalog.from_json({"weaknesses" => [] of JSON::Any, "categories" => ["x"]}.to_json)
+      end
+      expect_raises(CWE::Error, /each view must be an object/) do
+        CWE::Catalog.from_json({"weaknesses" => [] of JSON::Any, "views" => ["x"]}.to_json)
+      end
+    end
+
+    it "treats an out-of-range weakness id as a missing id" do
+      doc = malformed_catalog_doc([{"id" => 3_000_000_000_i64}]).to_json
+      expect_raises(CWE::Error, /weakness missing id/) do
+        CWE::Catalog.from_json(doc)
+      end
+    end
+
+    it "treats a non-array repeated field as empty instead of crashing" do
+      doc = malformed_catalog_doc([{
+        "id"                 => 79,
+        "related_weaknesses" => "nope",
+        "notes"              => 5,
+        "observed_examples"  => {"a" => "b"},
+      }]).to_json
+      w = CWE::Catalog.from_json(doc).find!(79)
+      w.related_weaknesses.should be_empty
+      w.notes.should be_empty
+      w.observed_examples.should be_empty
+    end
+
+    it "skips non-object elements of repeated object fields" do
+      doc = malformed_catalog_doc([{
+        "id"    => 79,
+        "notes" => ["a string", {"type" => "Other", "note" => "kept"}],
+      }]).to_json
+      notes = CWE::Catalog.from_json(doc).find!(79).notes
+      notes.size.should eq(1)
+      notes.first.note.should eq("kept")
+    end
+
+    it "skips non-string elements of repeated string fields" do
+      doc = malformed_catalog_doc([{
+        "id"                 => 79,
+        "functional_areas"   => ["File Processing", 5, nil],
+        "background_details" => "not-an-array",
+      }]).to_json
+      w = CWE::Catalog.from_json(doc).find!(79)
+      w.functional_areas.should eq(["File Processing"])
+      w.background_details.should be_empty
+    end
+
+    it "ignores a non-object mapping_notes / content_history block" do
+      doc = malformed_catalog_doc([{
+        "id"              => 79,
+        "mapping_notes"   => "Allowed",
+        "content_history" => ["2006-07-19"],
+      }]).to_json
+      w = CWE::Catalog.from_json(doc).find!(79)
+      w.mapping_notes.should be_nil
+      w.content_history.should be_nil
+    end
+
+    it "treats a non-array members list as empty instead of crashing" do
+      doc = {
+        "weaknesses" => [] of JSON::Any,
+        "categories" => [{"id" => 227, "members" => "nope"}],
+      }.to_json
+      CWE::Catalog.from_json(doc).category!(227).members.should be_empty
+    end
+
+    it "falls back to defaults when catalog_version is not a string" do
+      doc = {"catalog_version" => 4.2, "weaknesses" => [] of JSON::Any}.to_json
+      CWE::Catalog.from_json(doc).catalog_version.should eq("unknown")
     end
 
     it "skips a non-object mapping suggestion instead of crashing" do

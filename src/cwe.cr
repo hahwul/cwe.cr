@@ -23,15 +23,20 @@ require "./cwe/json"
 
 module CWE
   # The numeric portion of a CWE id, e.g. `"CWE-79"`, `"cwe-79"`, `" 79 "`,
-  # or `"79"`. Returns nil if the input does not match. Whitespace around
-  # the id is tolerated; embedded whitespace is not.
+  # or `"79"`. Returns nil if the input does not match.
+  #
+  # The prefix is case-insensitive and must be followed by exactly one
+  # separator — `-`, `_`, `:`, or a single space. Surrounding whitespace is
+  # stripped first; embedded whitespace, repeated separators, and the
+  # separator-less `"CWE79"` form are all rejected. Numbers too large for an
+  # `Int32` return nil rather than overflowing.
+  ID_PATTERN = /\A(?:[Cc][Ww][Ee][-_: ])?(\d+)\z/
+
   def self.parse_id?(input : String) : Int32?
     s = input.strip
     return if s.empty?
 
-    if md = /\A[Cc][Ww][Ee][-_:\s]+(\d+)\z/.match(s)
-      md[1].to_i?
-    elsif md = /\A(\d+)\z/.match(s)
+    if md = ID_PATTERN.match(s)
       md[1].to_i?
     end
   end
@@ -123,7 +128,15 @@ module CWE
     catalog.with_status(status)
   end
 
+  # Traversal accepts the same id forms as `find` — `79`, `"79"`, `"CWE-79"`.
+  # `max_depth` bounds the transitive walks; the real CWE hierarchy is only
+  # 3-4 levels deep, so the default is a guard against pathological catalogs
+  # rather than something callers normally set.
   def self.parents_of(id : Int, view_id : Int? = nil) : Array(Weakness)
+    catalog.parents_of(id, view_id)
+  end
+
+  def self.parents_of(id : String, view_id : Int? = nil) : Array(Weakness)
     catalog.parents_of(id, view_id)
   end
 
@@ -131,15 +144,31 @@ module CWE
     catalog.children_of(id, view_id)
   end
 
-  def self.ancestors_of(id : Int, view_id : Int? = nil) : Array(Weakness)
-    catalog.ancestors_of(id, view_id)
+  def self.children_of(id : String, view_id : Int? = nil) : Array(Weakness)
+    catalog.children_of(id, view_id)
   end
 
-  def self.descendants_of(id : Int, view_id : Int? = nil) : Array(Weakness)
-    catalog.descendants_of(id, view_id)
+  def self.ancestors_of(id : Int, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
+    catalog.ancestors_of(id, view_id, max_depth)
+  end
+
+  def self.ancestors_of(id : String, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
+    catalog.ancestors_of(id, view_id, max_depth)
+  end
+
+  def self.descendants_of(id : Int, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
+    catalog.descendants_of(id, view_id, max_depth)
+  end
+
+  def self.descendants_of(id : String, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
+    catalog.descendants_of(id, view_id, max_depth)
   end
 
   def self.pillar_of(id : Int) : Weakness?
+    catalog.pillar_of(id)
+  end
+
+  def self.pillar_of(id : String) : Weakness?
     catalog.pillar_of(id)
   end
 
@@ -198,6 +227,10 @@ module CWE
 
   # Resolved member weaknesses of a Category or View.
   def self.members_of(id : Int) : Array(Weakness)
+    catalog.members_of(id)
+  end
+
+  def self.members_of(id : String) : Array(Weakness)
     catalog.members_of(id)
   end
 

@@ -15,7 +15,7 @@ enum CWE::Abstraction
   Class     # General weakness class
   Base      # Concrete but broadly applicable weakness
   Variant   # Concrete weakness tied to a specific resource/technology
-  Compound  # Chain of weaknesses
+  Compound  # Chain or Composite of several weaknesses
   Other     # Unknown / future label
 end
 

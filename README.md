@@ -54,7 +54,7 @@ Each `CWE::Weakness` exposes:
 |---|---|
 | `id`, `cwe_id`, `url` | `Int32`, `"CWE-79"`, `https://...` |
 | `name` | `String` |
-| `abstraction` | `CWE::Abstraction` (`Pillar`, `Class`, `Base`, `Variant`) |
+| `abstraction` | `CWE::Abstraction` (`Pillar`, `Class`, `Base`, `Variant`, `Compound`) |
 | `structure` | `CWE::Structure` (`Simple`, `Composite`, `Chain`) |
 | `status` | `CWE::Status` (`Stable`, `Draft`, `Incomplete`, `Deprecated`, …) |
 | `description`, `extended_description` | `String?` |
@@ -100,13 +100,19 @@ CWE.category!(227).mapping_usage    # => CWE::MappingUsage::Prohibited
 
 ### Demonstrative examples
 
+Not every example carries code — some are prose only — so pick the ones
+that do:
+
 ```crystal
 w = CWE.find!(89)  # SQL Injection
-ex = w.demonstrative_examples.first
+ex = w.demonstrative_examples.find! { |e| !e.example_code.empty? }
 ex.intro_text                     # prose intro
-ex.example_code.first.language    # => "Java"
+ex.example_code.first.language    # => "C#"
 ex.example_code.first.nature      # => "Bad"
 ex.example_code.first.code        # the snippet
+
+# All the "Bad" samples across every example:
+w.demonstrative_examples.flat_map(&.example_code).select(&.nature.== "Bad")
 ```
 
 ### External references
@@ -136,6 +142,11 @@ CWE.pillar_of(79)        # => CWE-707
 # All edges are O(1) lookups via a pre-built index. Pass view_id to restrict
 # to a particular CWE view (1000 = Research, 1003 = Simplified Mapping):
 CWE.parents_of(79, view_id: 1000)
+
+# Every traversal helper takes the same id forms as `find`, and the
+# transitive walks accept a depth bound:
+CWE.ancestors_of("CWE-79")
+CWE.descendants_of("CWE-79", max_depth: 1)
 ```
 
 ### Search

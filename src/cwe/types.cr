@@ -4,35 +4,56 @@ module CWE
   # CWE catalog defines a small fixed set of abstraction levels. We expose
   # them as an enum so callers can pattern-match against them; unknown values
   # (catalog drift, future MITRE releases) map to `Other`.
+  #
+  # `Compound` is a genuine member of MITRE's `AbstractionEnumeration`, not a
+  # synonym for `Structure`: the seven Compound entries (CWE-61, 352, 384,
+  # 680, 689, 690, 692) carry `Abstraction="Compound"` *and* a separate
+  # `Structure` of `Chain` or `Composite`.
   enum Abstraction
     Pillar
     Class
     Base
     Variant
+    Compound
     Other
 
     def self.parse_label(s : String?) : Abstraction
       case s.try(&.strip).try(&.downcase)
-      when "pillar"  then Pillar
-      when "class"   then Class
-      when "base"    then Base
-      when "variant" then Variant
-      else                Other
+      when "pillar"   then Pillar
+      when "class"    then Class
+      when "base"     then Base
+      when "variant"  then Variant
+      when "compound" then Compound
+      else                 Other
       end
     end
 
     def to_s : String
       case self
-      in Pillar  then "Pillar"
-      in Class   then "Class"
-      in Base    then "Base"
-      in Variant then "Variant"
-      in Other   then "Other"
+      in Pillar   then "Pillar"
+      in Class    then "Class"
+      in Base     then "Base"
+      in Variant  then "Variant"
+      in Compound then "Compound"
+      in Other    then "Other"
       end
     end
 
     def to_s(io : IO) : Nil
       io << to_s
+    end
+
+    # JSON uses the MITRE label (`"Base"`), matching `to_s` and the
+    # `"abstraction"`/`"status"`/… fields the library already emits — not
+    # Crystal's default underscored member name (`"base"`). Reading is as
+    # forgiving as `parse_label`: an unrecognised label becomes `Other`
+    # instead of raising, so a future MITRE value cannot break a decode.
+    def to_json(json : ::JSON::Builder) : Nil
+      json.string(to_s)
+    end
+
+    def self.new(pull : ::JSON::PullParser) : Abstraction
+      parse_label(pull.read_string)
     end
   end
 
@@ -45,8 +66,15 @@ module CWE
     Chain
     Other
 
+    # Unlike the other label enums, an *absent* structure is not unknown:
+    # MITRE's schema declares `Structure` with `default="Simple"`, so an
+    # entry that omits the attribute is Simple. Only a present-but-unfamiliar
+    # label maps to `Other`. This also keeps a `Weakness` parsed from a
+    # document without the field equal to one built through the constructor,
+    # whose `structure` parameter has always defaulted to `Simple`.
     def self.parse_label(s : String?) : Structure
       case s.try(&.strip).try(&.downcase)
+      when nil, ""     then Simple
       when "simple"    then Simple
       when "composite" then Composite
       when "chain"     then Chain
@@ -65,6 +93,15 @@ module CWE
 
     def to_s(io : IO) : Nil
       io << to_s
+    end
+
+    # JSON label round-trip; see `Abstraction#to_json`.
+    def to_json(json : ::JSON::Builder) : Nil
+      json.string(to_s)
+    end
+
+    def self.new(pull : ::JSON::PullParser) : Structure
+      parse_label(pull.read_string)
     end
   end
 
@@ -101,6 +138,15 @@ module CWE
 
     def to_s(io : IO) : Nil
       io << to_s
+    end
+
+    # JSON label round-trip; see `Abstraction#to_json`.
+    def to_json(json : ::JSON::Builder) : Nil
+      json.string(to_s)
+    end
+
+    def self.new(pull : ::JSON::PullParser) : MappingUsage
+      parse_label(pull.read_string)
     end
   end
 
@@ -140,6 +186,15 @@ module CWE
 
     def to_s(io : IO) : Nil
       io << to_s
+    end
+
+    # JSON label round-trip; see `Abstraction#to_json`.
+    def to_json(json : ::JSON::Builder) : Nil
+      json.string(to_s)
+    end
+
+    def self.new(pull : ::JSON::PullParser) : Status
+      parse_label(pull.read_string)
     end
   end
 
@@ -415,7 +470,11 @@ module CWE
   struct MappingNotes
     include JSON::Serializable
 
-    getter usage : MappingUsage
+    # Every field carries a default so that the omit-when-empty shape written
+    # by `MappingNotes#to_json` can be read back by `MappingNotes.from_json`.
+    # Without them the round-trip failed with "Missing JSON attribute" for any
+    # entry that had no reasons or suggestions.
+    getter usage : MappingUsage = MappingUsage::Other
 
     @[JSON::Field(key: "rawUsage")]
     getter raw_usage : String?
@@ -425,11 +484,11 @@ module CWE
 
     # `Mapping_Notes/Reasons/Reason/@Type` values such as `"Frequent-Misuse"`,
     # `"Acceptable-Use"`, `"Prohibited"`, `"Abstraction"`, etc.
-    getter reasons : Array(String)
+    getter reasons : Array(String) = [] of String
 
     # `Mapping_Notes/Suggestions/Suggestion` — a list of related CWEs that
     # MITRE recommends as alternative mapping targets.
-    getter suggestions : Array(MappingSuggestion)
+    getter suggestions : Array(MappingSuggestion) = [] of MappingSuggestion
 
     def initialize(@usage = MappingUsage::Other,
                    @raw_usage = nil,
