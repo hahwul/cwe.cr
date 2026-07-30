@@ -44,6 +44,22 @@ describe CWE do
       CWE.parse_id?("CWE79").should be_nil
       CWE.parse_id?("cwe79").should be_nil
     end
+
+    it "accepts a single space as the separator" do
+      CWE.parse_id?("CWE 79").should eq(79)
+    end
+
+    it "rejects embedded whitespace and repeated separators" do
+      # Bug: the separator class was `[-_:\s]+`, so newlines, tabs and runs
+      # of mixed separators all parsed as a canonical id.
+      CWE.parse_id?("CWE-\n79").should be_nil
+      CWE.parse_id?("CWE-\t79").should be_nil
+      CWE.parse_id?("CWE- 79").should be_nil
+      CWE.parse_id?("CWE--79").should be_nil
+      CWE.parse_id?("CWE-_:79").should be_nil
+      CWE.parse_id?("CWE  79").should be_nil
+      CWE.parse_id?("7 9").should be_nil
+    end
   end
 
   describe ".parse_id" do

@@ -23,15 +23,20 @@ require "./cwe/json"
 
 module CWE
   # The numeric portion of a CWE id, e.g. `"CWE-79"`, `"cwe-79"`, `" 79 "`,
-  # or `"79"`. Returns nil if the input does not match. Whitespace around
-  # the id is tolerated; embedded whitespace is not.
+  # or `"79"`. Returns nil if the input does not match.
+  #
+  # The prefix is case-insensitive and must be followed by exactly one
+  # separator — `-`, `_`, `:`, or a single space. Surrounding whitespace is
+  # stripped first; embedded whitespace, repeated separators, and the
+  # separator-less `"CWE79"` form are all rejected. Numbers too large for an
+  # `Int32` return nil rather than overflowing.
+  ID_PATTERN = /\A(?:[Cc][Ww][Ee][-_: ])?(\d+)\z/
+
   def self.parse_id?(input : String) : Int32?
     s = input.strip
     return if s.empty?
 
-    if md = /\A[Cc][Ww][Ee][-_:\s]+(\d+)\z/.match(s)
-      md[1].to_i?
-    elsif md = /\A(\d+)\z/.match(s)
+    if md = ID_PATTERN.match(s)
       md[1].to_i?
     end
   end
