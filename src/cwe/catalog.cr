@@ -94,27 +94,99 @@ module CWE
     # their own subset.
     def self.from_json(input : String | IO) : Catalog
       doc = ::JSON.parse(input)
+      unless doc.as_h?
+        raise CWE::Error.new("malformed CWE document: top level must be an object")
+      end
 
-      version = doc["catalog_version"]?.try(&.as_s) || "unknown"
-      generated = doc["generated_at"]?.try(&.as_s) || ""
+      version = raw_s(doc, "catalog_version") || "unknown"
+      generated = raw_s(doc, "generated_at") || ""
 
-      weaknesses_node = doc["weaknesses"]? ||
-                        raise CWE::Error.new("malformed CWE document: missing required \"weaknesses\" key")
-      ws_array = weaknesses_node.as_a? ||
-                 raise CWE::Error.new("malformed CWE document: \"weaknesses\" must be an array")
-      ws = ws_array.map { |w| weakness_from_json(w) }
-      cats = doc["categories"]?.try(&.as_a.map { |c| category_from_json(c) }) || [] of Category
-      vws = doc["views"]?.try(&.as_a.map { |v| view_from_json(v) }) || [] of View
-      ers = doc["external_references"]?.try(&.as_a.map { |r| external_reference_from_json(r) }) ||
-            [] of ExternalReference
+      unless field(doc, "weaknesses")
+        raise CWE::Error.new("malformed CWE document: missing required \"weaknesses\" key")
+      end
+      ws = entry_array(doc, "weaknesses").map { |w| weakness_from_json(w) }
+      cats = entry_array(doc, "categories").map { |c| category_from_json(c) }
+      vws = entry_array(doc, "views").map { |v| view_from_json(v) }
+      ers = entry_array(doc, "external_references").map { |r| external_reference_from_json(r) }
       new(version, generated, ws, cats, vws, ers)
+    end
+
+    # ---------- Defensive JSON access ----------
+    #
+    # `from_json` is public API, so it has to cope with any document a caller
+    # hands it — not just the one `data/build_data.cr` produces. The helpers
+    # below degrade a structurally wrong node (a scalar where an object was
+    # expected, a string where an array was expected) to nil / an empty list
+    # instead of letting `JSON::Any`'s raw `TypeCastError` — or its bare
+    # `Exception: Expected Hash for #[]?` — escape. Required fields still
+    # raise a wrapped `CWE::Error`.
+
+    # Value at `key`, or nil when `j` is not an object or has no such key.
+    private def self.field(j : ::JSON::Any, key : String) : ::JSON::Any?
+      j.as_h?.try(&.[key]?)
+    end
+
+    # String at `key`, verbatim; nil when absent or not a string.
+    private def self.raw_s(j : ::JSON::Any, key : String) : String?
+      field(j, key).try(&.as_s?)
+    end
+
+    # As `raw_s`, but an empty string reads as "absent".
+    private def self.s(j : ::JSON::Any, key : String) : String?
+      str = raw_s(j, key)
+      str && !str.empty? ? str : nil
+    end
+
+    # Int32 at `key`; nil when absent, non-numeric, or out of Int32 range.
+    private def self.i32(j : ::JSON::Any, key : String) : Int32?
+      n = field(j, key).try(&.as_i64?) || return
+      n.to_i32 if Int32::MIN <= n && n <= Int32::MAX
+    end
+
+    # Top-level entry list. Absent reads as empty; present-but-not-an-array
+    # is a malformed document.
+    private def self.entry_array(doc : ::JSON::Any, key : String) : Array(::JSON::Any)
+      node = field(doc, key) || return [] of ::JSON::Any
+      node.as_a? || raise CWE::Error.new(
+        "malformed CWE document: #{key.inspect} must be an array")
+    end
+
+    # Object elements of the array at `key`; non-object elements are skipped,
+    # an absent or non-array node yields an empty list.
+    private def self.objects(j : ::JSON::Any, key : String) : Array(::JSON::Any)
+      node = field(j, key) || return [] of ::JSON::Any
+      arr = node.as_a? || return [] of ::JSON::Any
+      arr.select { |e| !e.as_h?.nil? }
+    end
+
+    # String elements of the array at `key`; other elements are skipped.
+    private def self.strings(j : ::JSON::Any, key : String) : Array(String)
+      node = field(j, key) || return [] of String
+      arr = node.as_a? || return [] of String
+      arr.compact_map(&.as_s?)
+    end
+
+    # Int32 elements of the array at `key`; other elements are skipped.
+    private def self.int32s(j : ::JSON::Any, key : String) : Array(Int32)
+      node = field(j, key) || return [] of Int32
+      arr = node.as_a? || return [] of Int32
+      arr.compact_map do |e|
+        n = e.as_i64?
+        n.to_i32 if n && Int32::MIN <= n && n <= Int32::MAX
+      end
+    end
+
+    # The object at `key`, or nil when absent or not an object.
+    private def self.object(j : ::JSON::Any, key : String) : ::JSON::Any?
+      node = field(j, key) || return
+      node.as_h? ? node : nil
     end
 
     private def self.external_reference_from_json(j : ::JSON::Any) : ExternalReference
       ExternalReference.new(
-        reference_id: (j["reference_id"]?.try(&.as_s) ||
+        reference_id: (raw_s(j, "reference_id") ||
                        raise CWE::Error.new("external reference missing reference_id")),
-        authors: (j["authors"]?.try(&.as_a.map(&.as_s)) || [] of String),
+        authors: strings(j, "authors"),
         title: s(j, "title"),
         edition: s(j, "edition"),
         publication: s(j, "publication"),
@@ -128,75 +200,74 @@ module CWE
     end
 
     private def self.category_from_json(j : ::JSON::Any) : Category
-      id = (j["id"]?.try(&.as_i64?) || raise CWE::Error.new("category missing id")).to_i32
-      status_raw = j["status"]?.try(&.as_s)
+      raise CWE::Error.new("malformed CWE document: each category must be an object") unless j.as_h?
+      id = i32(j, "id") || raise CWE::Error.new("category missing id")
+      status_raw = raw_s(j, "status")
       Category.new(
         id: id,
-        name: j["name"]?.try(&.as_s?) || "",
+        name: raw_s(j, "name") || "",
         status: Status.parse_label(status_raw),
         summary: s(j, "summary"),
-        members: parse_members(j["members"]?),
-        notes: (j["notes"]?.try(&.as_a.map { |x| parse_note(x) }) || [] of Note),
-        taxonomy_mappings: (j["taxonomy_mappings"]?.try(&.as_a.map { |x| parse_taxonomy(x) }) || [] of TaxonomyMapping),
-        references: (j["references"]?.try(&.as_a.map { |x| parse_reference_link(x) }) || [] of ReferenceLink),
-        mapping_notes: j["mapping_notes"]?.try { |x| parse_mapping_notes(x) },
-        content_history: j["content_history"]?.try { |x| parse_content_history(x) },
+        members: parse_members(j),
+        notes: objects(j, "notes").map { |x| parse_note(x) },
+        taxonomy_mappings: objects(j, "taxonomy_mappings").map { |x| parse_taxonomy(x) },
+        references: objects(j, "references").map { |x| parse_reference_link(x) },
+        mapping_notes: object(j, "mapping_notes").try { |x| parse_mapping_notes(x) },
+        content_history: object(j, "content_history").try { |x| parse_content_history(x) },
         raw_status: status_raw,
       )
     end
 
     private def self.view_from_json(j : ::JSON::Any) : View
-      id = (j["id"]?.try(&.as_i64?) || raise CWE::Error.new("view missing id")).to_i32
-      status_raw = j["status"]?.try(&.as_s)
+      raise CWE::Error.new("malformed CWE document: each view must be an object") unless j.as_h?
+      id = i32(j, "id") || raise CWE::Error.new("view missing id")
+      status_raw = raw_s(j, "status")
       View.new(
         id: id,
-        name: j["name"]?.try(&.as_s?) || "",
+        name: raw_s(j, "name") || "",
         type: s(j, "type"),
         status: Status.parse_label(status_raw),
         objective: s(j, "objective"),
         filter: s(j, "filter"),
-        members: parse_members(j["members"]?),
-        audience: (j["audience"]?.try(&.as_a.map { |x| parse_stakeholder(x) }) || [] of Stakeholder),
-        notes: (j["notes"]?.try(&.as_a.map { |x| parse_note(x) }) || [] of Note),
-        references: (j["references"]?.try(&.as_a.map { |x| parse_reference_link(x) }) || [] of ReferenceLink),
-        mapping_notes: j["mapping_notes"]?.try { |x| parse_mapping_notes(x) },
-        content_history: j["content_history"]?.try { |x| parse_content_history(x) },
+        members: parse_members(j),
+        audience: objects(j, "audience").map { |x| parse_stakeholder(x) },
+        notes: objects(j, "notes").map { |x| parse_note(x) },
+        references: objects(j, "references").map { |x| parse_reference_link(x) },
+        mapping_notes: object(j, "mapping_notes").try { |x| parse_mapping_notes(x) },
+        content_history: object(j, "content_history").try { |x| parse_content_history(x) },
         raw_status: status_raw,
       )
     end
 
     private def self.parse_reference_link(x : ::JSON::Any) : ReferenceLink
       ReferenceLink.new(
-        external_reference_id: x["external_reference_id"]?.try(&.as_s) || "",
+        external_reference_id: raw_s(x, "external_reference_id") || "",
         section: s(x, "section"),
       )
     end
 
     private def self.parse_stakeholder(x : ::JSON::Any) : Stakeholder
       Stakeholder.new(
-        type: x["type"]?.try(&.as_s) || "",
+        type: raw_s(x, "type") || "",
         description: s(x, "description"),
       )
     end
 
     private def self.parse_mapping_notes(j : ::JSON::Any) : MappingNotes
-      raw_usage = j["usage"]?.try(&.as_s)
-      reasons = (j["reasons"]?.try(&.as_a.map(&.as_s)) || [] of String)
-      suggestions = (j["suggestions"]?.try(&.as_a.compact_map { |s| parse_mapping_suggestion(s) }) || [] of MappingSuggestion)
+      raw_usage = raw_s(j, "usage")
       MappingNotes.new(
         usage: MappingUsage.parse_label(raw_usage),
         raw_usage: raw_usage,
         rationale: s(j, "rationale"),
         comments: s(j, "comments"),
-        reasons: reasons,
-        suggestions: suggestions,
+        reasons: strings(j, "reasons"),
+        suggestions: objects(j, "suggestions").map { |x| parse_mapping_suggestion(x) },
       )
     end
 
-    private def self.parse_mapping_suggestion(x : ::JSON::Any) : MappingSuggestion?
-      return unless x.as_h?
+    private def self.parse_mapping_suggestion(x : ::JSON::Any) : MappingSuggestion
       MappingSuggestion.new(
-        cwe_id: (x["cwe_id"]?.try(&.as_i64) || 0_i64).to_i32,
+        cwe_id: i32(x, "cwe_id") || 0,
         comment: s(x, "comment"),
       )
     end
@@ -207,46 +278,43 @@ module CWE
         submission_name: s(j, "submission_name"),
         submission_organization: s(j, "submission_organization"),
         last_modification_date: s(j, "last_modification_date"),
-        modification_count: (j["modification_count"]?.try(&.as_i64) || 0_i64).to_i32,
+        modification_count: i32(j, "modification_count") || 0,
       )
     end
 
     private def self.parse_demonstrative_example(j : ::JSON::Any) : DemonstrativeExample
-      codes = (j["example_code"]?.try(&.as_a.map { |c| parse_example_code(c) }) || [] of ExampleCode)
-      bodies = (j["body_text"]?.try(&.as_a.map(&.as_s)) || [] of String)
-      refs = (j["reference_ids"]?.try(&.as_a.map(&.as_s)) || [] of String)
       DemonstrativeExample.new(
         intro_text: s(j, "intro_text"),
-        body_text: bodies,
-        example_code: codes,
-        reference_ids: refs,
+        body_text: strings(j, "body_text"),
+        example_code: objects(j, "example_code").map { |c| parse_example_code(c) },
+        reference_ids: strings(j, "reference_ids"),
       )
     end
 
     private def self.parse_example_code(j : ::JSON::Any) : ExampleCode
       ExampleCode.new(
-        code: j["code"]?.try(&.as_s) || "",
+        code: raw_s(j, "code") || "",
         nature: s(j, "nature"),
         language: s(j, "language"),
       )
     end
 
-    private def self.parse_members(j : ::JSON::Any?) : Array(Category::Member)
-      return [] of Category::Member unless j
-      j.as_a.map do |m|
+    private def self.parse_members(j : ::JSON::Any) : Array(Category::Member)
+      objects(j, "members").map do |m|
         Category::Member.new(
-          cwe_id: (m["cwe_id"]?.try(&.as_i64) || 0_i64).to_i32,
-          view_id: (m["view_id"]?.try(&.as_i64) || 0_i64).to_i32,
+          cwe_id: i32(m, "cwe_id") || 0,
+          view_id: i32(m, "view_id") || 0,
         )
       end
     end
 
     private def self.weakness_from_json(j : ::JSON::Any) : Weakness
-      id = (j["id"]?.try(&.as_i64?) || raise CWE::Error.new("weakness missing id")).to_i32
-      name = j["name"]?.try(&.as_s?) || ""
-      abs_raw = j["abstraction"]?.try(&.as_s)
-      status_raw = j["status"]?.try(&.as_s)
-      structure_raw = j["structure"]?.try(&.as_s)
+      raise CWE::Error.new("malformed CWE document: each weakness must be an object") unless j.as_h?
+      id = i32(j, "id") || raise CWE::Error.new("weakness missing id")
+      name = raw_s(j, "name") || ""
+      abs_raw = raw_s(j, "abstraction")
+      status_raw = raw_s(j, "status")
+      structure_raw = raw_s(j, "structure")
 
       Weakness.new(
         id: id,
@@ -254,60 +322,53 @@ module CWE
         abstraction: Abstraction.parse_label(abs_raw),
         status: Status.parse_label(status_raw),
         structure: Structure.parse_label(structure_raw),
-        description: j["description"]?.try(&.as_s),
-        extended_description: j["extended_description"]?.try(&.as_s),
-        likelihood_of_exploit: j["likelihood_of_exploit"]?.try(&.as_s),
-        related_weaknesses: (j["related_weaknesses"]?.try(&.as_a.map { |x| parse_related(x) }) || [] of Related),
-        ordinalities: (j["ordinalities"]?.try(&.as_a.map { |x| parse_ordinality(x) }) || [] of Ordinality),
-        applicable_platforms: (j["applicable_platforms"]?.try(&.as_a.compact_map { |x| parse_platform(x) }) || [] of ApplicablePlatform),
-        alternate_terms: (j["alternate_terms"]?.try(&.as_a.map { |x| parse_alt_term(x) }) || [] of AlternateTerm),
-        modes_of_introduction: (j["modes_of_introduction"]?.try(&.as_a.map { |x| parse_intro(x) }) || [] of ModeOfIntroduction),
-        common_consequences: (j["common_consequences"]?.try(&.as_a.map { |x| parse_consequence(x) }) || [] of Consequence),
-        detection_methods: (j["detection_methods"]?.try(&.as_a.map { |x| parse_detection(x) }) || [] of DetectionMethod),
-        potential_mitigations: (j["potential_mitigations"]?.try(&.as_a.map { |x| parse_mitigation(x) }) || [] of Mitigation),
-        observed_examples: (j["observed_examples"]?.try(&.as_a.map { |x| parse_example(x) }) || [] of ObservedExample),
-        demonstrative_examples: (j["demonstrative_examples"]?.try(&.as_a.map { |x| parse_demonstrative_example(x) }) || [] of DemonstrativeExample),
-        taxonomy_mappings: (j["taxonomy_mappings"]?.try(&.as_a.map { |x| parse_taxonomy(x) }) || [] of TaxonomyMapping),
-        related_attack_patterns: (j["related_attack_patterns"]?.try(&.as_a?.try(&.compact_map(&.as_i64?).map(&.to_i32))) || [] of Int32),
-        notes: (j["notes"]?.try(&.as_a.map { |x| parse_note(x) }) || [] of Note),
-        background_details: (j["background_details"]?.try(&.as_a.map(&.as_s)) || [] of String),
-        functional_areas: (j["functional_areas"]?.try(&.as_a.map(&.as_s)) || [] of String),
-        affected_resources: (j["affected_resources"]?.try(&.as_a.map(&.as_s)) || [] of String),
-        exploitation_factors: (j["exploitation_factors"]?.try(&.as_a.map(&.as_s)) || [] of String),
-        references: (j["references"]?.try(&.as_a.map { |x| parse_reference_link(x) }) || [] of ReferenceLink),
-        mapping_notes: j["mapping_notes"]?.try { |x| parse_mapping_notes(x) },
-        content_history: j["content_history"]?.try { |x| parse_content_history(x) },
+        description: raw_s(j, "description"),
+        extended_description: raw_s(j, "extended_description"),
+        likelihood_of_exploit: raw_s(j, "likelihood_of_exploit"),
+        related_weaknesses: objects(j, "related_weaknesses").map { |x| parse_related(x) },
+        ordinalities: objects(j, "ordinalities").map { |x| parse_ordinality(x) },
+        applicable_platforms: objects(j, "applicable_platforms").compact_map { |x| parse_platform(x) },
+        alternate_terms: objects(j, "alternate_terms").map { |x| parse_alt_term(x) },
+        modes_of_introduction: objects(j, "modes_of_introduction").map { |x| parse_intro(x) },
+        common_consequences: objects(j, "common_consequences").map { |x| parse_consequence(x) },
+        detection_methods: objects(j, "detection_methods").map { |x| parse_detection(x) },
+        potential_mitigations: objects(j, "potential_mitigations").map { |x| parse_mitigation(x) },
+        observed_examples: objects(j, "observed_examples").map { |x| parse_example(x) },
+        demonstrative_examples: objects(j, "demonstrative_examples").map { |x| parse_demonstrative_example(x) },
+        taxonomy_mappings: objects(j, "taxonomy_mappings").map { |x| parse_taxonomy(x) },
+        related_attack_patterns: int32s(j, "related_attack_patterns"),
+        notes: objects(j, "notes").map { |x| parse_note(x) },
+        background_details: strings(j, "background_details"),
+        functional_areas: strings(j, "functional_areas"),
+        affected_resources: strings(j, "affected_resources"),
+        exploitation_factors: strings(j, "exploitation_factors"),
+        references: objects(j, "references").map { |x| parse_reference_link(x) },
+        mapping_notes: object(j, "mapping_notes").try { |x| parse_mapping_notes(x) },
+        content_history: object(j, "content_history").try { |x| parse_content_history(x) },
         raw_abstraction: abs_raw,
         raw_status: status_raw,
         raw_structure: structure_raw,
       )
     end
 
-    private def self.s(j, k) : String?
-      v = j[k]?
-      return unless v
-      str = v.as_s?
-      str.try(&.empty?) ? nil : str
-    end
-
-    private def self.parse_related(x) : Related
+    private def self.parse_related(x : ::JSON::Any) : Related
       Related.new(
-        nature: x["nature"]?.try(&.as_s) || "",
-        cwe_id: (x["cwe_id"]?.try(&.as_i64) || 0_i64).to_i32,
-        view_id: (x["view_id"]?.try(&.as_i64) || 0_i64).to_i32,
+        nature: raw_s(x, "nature") || "",
+        cwe_id: i32(x, "cwe_id") || 0,
+        view_id: i32(x, "view_id") || 0,
         ordinal: s(x, "ordinal"),
         chain_id: s(x, "chain_id"),
       )
     end
 
-    private def self.parse_ordinality(x) : Ordinality
+    private def self.parse_ordinality(x : ::JSON::Any) : Ordinality
       Ordinality.new(
-        ordinality: x["ordinality"]?.try(&.as_s) || "",
+        ordinality: raw_s(x, "ordinality") || "",
         description: s(x, "description"),
       )
     end
 
-    private def self.parse_platform(x) : ApplicablePlatform?
+    private def self.parse_platform(x : ::JSON::Any) : ApplicablePlatform?
       hash = x.as_h? || return
       keys = hash.keys
       kind, prefix = if keys.any?(&.starts_with?("language"))
@@ -332,32 +393,32 @@ module CWE
       )
     end
 
-    private def self.parse_alt_term(x) : AlternateTerm
+    private def self.parse_alt_term(x : ::JSON::Any) : AlternateTerm
       AlternateTerm.new(
-        term: x["term"]?.try(&.as_s) || "",
+        term: raw_s(x, "term") || "",
         description: s(x, "description"),
       )
     end
 
-    private def self.parse_intro(x) : ModeOfIntroduction
+    private def self.parse_intro(x : ::JSON::Any) : ModeOfIntroduction
       ModeOfIntroduction.new(
-        phase: x["phase"]?.try(&.as_s) || "",
+        phase: raw_s(x, "phase") || "",
         note: s(x, "note"),
       )
     end
 
-    private def self.parse_consequence(x) : Consequence
+    private def self.parse_consequence(x : ::JSON::Any) : Consequence
       Consequence.new(
-        scope: x["scope"]?.try(&.as_s) || "",
+        scope: raw_s(x, "scope") || "",
         impact: s(x, "impact"),
         likelihood: s(x, "likelihood"),
         note: s(x, "note"),
       )
     end
 
-    private def self.parse_detection(x) : DetectionMethod
+    private def self.parse_detection(x : ::JSON::Any) : DetectionMethod
       DetectionMethod.new(
-        method: x["method"]?.try(&.as_s) || "",
+        method: raw_s(x, "method") || "",
         method_id: s(x, "method_id"),
         description: s(x, "description"),
         effectiveness: s(x, "effectiveness"),
@@ -365,7 +426,7 @@ module CWE
       )
     end
 
-    private def self.parse_mitigation(x) : Mitigation
+    private def self.parse_mitigation(x : ::JSON::Any) : Mitigation
       Mitigation.new(
         mitigation_id: s(x, "mitigation_id"),
         phase: s(x, "phase"),
@@ -376,24 +437,24 @@ module CWE
       )
     end
 
-    private def self.parse_example(x) : ObservedExample
+    private def self.parse_example(x : ::JSON::Any) : ObservedExample
       ObservedExample.new(
-        reference: x["reference"]?.try(&.as_s) || "",
+        reference: raw_s(x, "reference") || "",
         description: s(x, "description"),
         link: s(x, "link"),
       )
     end
 
-    private def self.parse_taxonomy(x) : TaxonomyMapping
+    private def self.parse_taxonomy(x : ::JSON::Any) : TaxonomyMapping
       TaxonomyMapping.new(
-        taxonomy_name: x["taxonomy_name"]?.try(&.as_s) || "",
+        taxonomy_name: raw_s(x, "taxonomy_name") || "",
         entry_id: s(x, "entry_id"),
         entry_name: s(x, "entry_name"),
         mapping_fit: s(x, "mapping_fit"),
       )
     end
 
-    private def self.parse_note(x) : Note
+    private def self.parse_note(x : ::JSON::Any) : Note
       Note.new(
         type: s(x, "type"),
         note: s(x, "note"),

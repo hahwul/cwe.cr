@@ -761,6 +761,98 @@ describe CWE do
       cat.find!(79).related_attack_patterns.should be_empty
     end
 
+    it "raises CWE::Error when the top level is not an object" do
+      expect_raises(CWE::Error, /top level must be an object/) do
+        CWE::Catalog.from_json("[]")
+      end
+    end
+
+    it "raises CWE::Error when categories/views/external_references are not arrays" do
+      {"categories", "views", "external_references"}.each do |key|
+        doc = {"weaknesses" => [] of JSON::Any, key => "nope"}.to_json
+        expect_raises(CWE::Error, /"#{key}" must be an array/) do
+          CWE::Catalog.from_json(doc)
+        end
+      end
+    end
+
+    it "raises CWE::Error (not a bare Exception) for non-object entries" do
+      expect_raises(CWE::Error, /each weakness must be an object/) do
+        CWE::Catalog.from_json(malformed_catalog_doc([1, 2, 3]).to_json)
+      end
+      expect_raises(CWE::Error, /each category must be an object/) do
+        CWE::Catalog.from_json({"weaknesses" => [] of JSON::Any, "categories" => ["x"]}.to_json)
+      end
+      expect_raises(CWE::Error, /each view must be an object/) do
+        CWE::Catalog.from_json({"weaknesses" => [] of JSON::Any, "views" => ["x"]}.to_json)
+      end
+    end
+
+    it "treats an out-of-range weakness id as a missing id" do
+      doc = malformed_catalog_doc([{"id" => 3_000_000_000_i64}]).to_json
+      expect_raises(CWE::Error, /weakness missing id/) do
+        CWE::Catalog.from_json(doc)
+      end
+    end
+
+    it "treats a non-array repeated field as empty instead of crashing" do
+      doc = malformed_catalog_doc([{
+        "id"                 => 79,
+        "related_weaknesses" => "nope",
+        "notes"              => 5,
+        "observed_examples"  => {"a" => "b"},
+      }]).to_json
+      w = CWE::Catalog.from_json(doc).find!(79)
+      w.related_weaknesses.should be_empty
+      w.notes.should be_empty
+      w.observed_examples.should be_empty
+    end
+
+    it "skips non-object elements of repeated object fields" do
+      doc = malformed_catalog_doc([{
+        "id"    => 79,
+        "notes" => ["a string", {"type" => "Other", "note" => "kept"}],
+      }]).to_json
+      notes = CWE::Catalog.from_json(doc).find!(79).notes
+      notes.size.should eq(1)
+      notes.first.note.should eq("kept")
+    end
+
+    it "skips non-string elements of repeated string fields" do
+      doc = malformed_catalog_doc([{
+        "id"                 => 79,
+        "functional_areas"   => ["File Processing", 5, nil],
+        "background_details" => "not-an-array",
+      }]).to_json
+      w = CWE::Catalog.from_json(doc).find!(79)
+      w.functional_areas.should eq(["File Processing"])
+      w.background_details.should be_empty
+    end
+
+    it "ignores a non-object mapping_notes / content_history block" do
+      doc = malformed_catalog_doc([{
+        "id"              => 79,
+        "mapping_notes"   => "Allowed",
+        "content_history" => ["2006-07-19"],
+      }]).to_json
+      w = CWE::Catalog.from_json(doc).find!(79)
+      w.mapping_notes.should be_nil
+      w.content_history.should be_nil
+    end
+
+    it "treats a non-array members list as empty instead of crashing" do
+      doc = {
+        "weaknesses" => [] of JSON::Any,
+        "categories" => [{"id" => 227, "members" => "nope"}],
+      }.to_json
+      CWE::Catalog.from_json(doc).category!(227).members.should be_empty
+    end
+
+    it "falls back to defaults when catalog_version is not a string" do
+      doc = {"catalog_version" => 4.2, "weaknesses" => [] of JSON::Any}.to_json
+      CWE::Catalog.from_json(doc).catalog_version.should eq("unknown")
+    end
+
     it "skips a non-object mapping suggestion instead of crashing" do
       doc = malformed_catalog_doc([{
         "id"            => 79,
