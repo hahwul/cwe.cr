@@ -128,7 +128,15 @@ module CWE
     catalog.with_status(status)
   end
 
+  # Traversal accepts the same id forms as `find` — `79`, `"79"`, `"CWE-79"`.
+  # `max_depth` bounds the transitive walks; the real CWE hierarchy is only
+  # 3-4 levels deep, so the default is a guard against pathological catalogs
+  # rather than something callers normally set.
   def self.parents_of(id : Int, view_id : Int? = nil) : Array(Weakness)
+    catalog.parents_of(id, view_id)
+  end
+
+  def self.parents_of(id : String, view_id : Int? = nil) : Array(Weakness)
     catalog.parents_of(id, view_id)
   end
 
@@ -136,15 +144,31 @@ module CWE
     catalog.children_of(id, view_id)
   end
 
-  def self.ancestors_of(id : Int, view_id : Int? = nil) : Array(Weakness)
-    catalog.ancestors_of(id, view_id)
+  def self.children_of(id : String, view_id : Int? = nil) : Array(Weakness)
+    catalog.children_of(id, view_id)
   end
 
-  def self.descendants_of(id : Int, view_id : Int? = nil) : Array(Weakness)
-    catalog.descendants_of(id, view_id)
+  def self.ancestors_of(id : Int, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
+    catalog.ancestors_of(id, view_id, max_depth)
+  end
+
+  def self.ancestors_of(id : String, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
+    catalog.ancestors_of(id, view_id, max_depth)
+  end
+
+  def self.descendants_of(id : Int, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
+    catalog.descendants_of(id, view_id, max_depth)
+  end
+
+  def self.descendants_of(id : String, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
+    catalog.descendants_of(id, view_id, max_depth)
   end
 
   def self.pillar_of(id : Int) : Weakness?
+    catalog.pillar_of(id)
+  end
+
+  def self.pillar_of(id : String) : Weakness?
     catalog.pillar_of(id)
   end
 
@@ -203,6 +227,10 @@ module CWE
 
   # Resolved member weaknesses of a Category or View.
   def self.members_of(id : Int) : Array(Weakness)
+    catalog.members_of(id)
+  end
+
+  def self.members_of(id : String) : Array(Weakness)
     catalog.members_of(id)
   end
 

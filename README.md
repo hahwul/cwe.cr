@@ -136,6 +136,11 @@ CWE.pillar_of(79)        # => CWE-707
 # All edges are O(1) lookups via a pre-built index. Pass view_id to restrict
 # to a particular CWE view (1000 = Research, 1003 = Simplified Mapping):
 CWE.parents_of(79, view_id: 1000)
+
+# Every traversal helper takes the same id forms as `find`, and the
+# transitive walks accept a depth bound:
+CWE.ancestors_of("CWE-79")
+CWE.descendants_of("CWE-79", max_depth: 1)
 ```
 
 ### Search

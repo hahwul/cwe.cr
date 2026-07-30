@@ -499,6 +499,44 @@ describe CWE do
     end
   end
 
+  describe "string ids across the traversal API" do
+    # Gap: find/category/view/entry accepted "CWE-79", but every traversal
+    # helper was Int-only, so a caller holding the string form had to convert
+    # by hand.
+    it "accepts the same id forms as find" do
+      %w[79 CWE-79 cwe-79].each do |key|
+        CWE.parents_of(key).map(&.id).should eq(CWE.parents_of(79).map(&.id))
+        CWE.children_of(key).map(&.id).should eq(CWE.children_of(79).map(&.id))
+        CWE.ancestors_of(key).map(&.id).should eq(CWE.ancestors_of(79).map(&.id))
+        CWE.descendants_of(key).map(&.id).should eq(CWE.descendants_of(79).map(&.id))
+        CWE.pillar_of(key).should eq(CWE.pillar_of(79))
+      end
+      CWE.members_of("CWE-1000").map(&.id).should eq(CWE.members_of(1000).map(&.id))
+    end
+
+    it "honours view_id with a string id" do
+      CWE.parents_of("CWE-79", view_id: 1000).map(&.id).should eq([74])
+      CWE.parents_of("CWE-79", view_id: 9999).should be_empty
+    end
+
+    it "treats an unparseable id as a miss" do
+      CWE.parents_of("not-a-cwe").should be_empty
+      CWE.children_of("not-a-cwe").should be_empty
+      CWE.ancestors_of("not-a-cwe").should be_empty
+      CWE.descendants_of("not-a-cwe").should be_empty
+      CWE.members_of("not-a-cwe").should be_empty
+      CWE.pillar_of("not-a-cwe").should be_nil
+    end
+
+    it "exposes max_depth on the module-level walks" do
+      # Bug: Catalog#ancestors_of/#descendants_of took max_depth, but the
+      # CWE.* delegations dropped it, so it could not be reached at all.
+      CWE.ancestors_of(79, max_depth: 1).map(&.id).should eq(CWE.parents_of(79).map(&.id))
+      CWE.descendants_of(79, max_depth: 1).map(&.id).should eq(CWE.children_of(79).map(&.id))
+      CWE.ancestors_of(79, max_depth: 1).size.should be < CWE.ancestors_of(79).size
+    end
+  end
+
   describe "pillar_of edge cases" do
     it "returns the entry itself when it is already a Pillar" do
       CWE.pillar_of(284).try(&.id).should eq(284)

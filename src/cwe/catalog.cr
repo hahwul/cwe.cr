@@ -670,6 +670,11 @@ module CWE
       mem_ids.compact_map { |m| find(m) }
     end
 
+    def members_of(id : String) : Array(Weakness)
+      i = CWE.parse_id?(id) || return [] of Weakness
+      members_of(i)
+    end
+
     # ---------- Filters ----------
 
     def with_abstraction(level : Abstraction) : Array(Weakness)
@@ -696,6 +701,15 @@ module CWE
       rels.compact_map { |r| find(r.cwe_id) }.uniq!
     end
 
+    # String-id forms of the traversal API, so callers holding a `"CWE-79"`
+    # can walk the hierarchy without converting first — the same way `find`,
+    # `category`, `view` and `entry` already accept either form. An id that
+    # does not parse is a miss, not an error.
+    def parents_of(id : String, view_id : Int? = nil) : Array(Weakness)
+      i = CWE.parse_id?(id) || return [] of Weakness
+      parents_of(i, view_id)
+    end
+
     # Direct children of `id`. Resolved via the pre-built children index in
     # O(children); when `view_id` is given, only children whose `ChildOf`
     # edge belongs to that view are returned. The returned array is a copy of
@@ -710,6 +724,11 @@ module CWE
         end
       end
       kids.dup
+    end
+
+    def children_of(id : String, view_id : Int? = nil) : Array(Weakness)
+      i = CWE.parse_id?(id) || return [] of Weakness
+      children_of(i, view_id)
     end
 
     # All ancestors (transitive closure of `ChildOf`), nearest first.
@@ -733,6 +752,11 @@ module CWE
       result
     end
 
+    def ancestors_of(id : String, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
+      i = CWE.parse_id?(id) || return [] of Weakness
+      ancestors_of(i, view_id, max_depth)
+    end
+
     # All descendants (transitive closure of children), nearest first.
     def descendants_of(id : Int, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
       seen = Set(Int32).new
@@ -752,6 +776,11 @@ module CWE
       result
     end
 
+    def descendants_of(id : String, view_id : Int? = nil, max_depth : Int = 32) : Array(Weakness)
+      i = CWE.parse_id?(id) || return [] of Weakness
+      descendants_of(i, view_id, max_depth)
+    end
+
     # The pillar (top-level entry) reached by walking `ChildOf` edges from
     # `id`. Returns the entry itself if it is already a `Pillar`. Returns
     # nil if `id` is not in the catalog. If the ancestor chain contains a
@@ -763,6 +792,11 @@ module CWE
       chain = ancestors_of(id)
       chain.reverse.find { |a| a.abstraction == Abstraction::Pillar } ||
         chain.last?
+    end
+
+    def pillar_of(id : String) : Weakness?
+      i = CWE.parse_id?(id) || return
+      pillar_of(i)
     end
 
     # ---------- Search ----------
