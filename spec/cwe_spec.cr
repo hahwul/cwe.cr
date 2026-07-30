@@ -479,6 +479,42 @@ describe CWE do
       first_tax.has_key?("taxonomy_name").should be_false
     end
 
+    it "serializes label enums the same way standalone as inside an entry" do
+      # Bug: Crystal's default Enum#to_json emits the underscored member name,
+      # so `w.abstraction.to_json` was "base" while `w.to_json["abstraction"]`
+      # was "Base".
+      CWE::Abstraction::Base.to_json.should eq(%("Base"))
+      CWE::Abstraction::Compound.to_json.should eq(%("Compound"))
+      CWE::Status::Stable.to_json.should eq(%("Stable"))
+      CWE::Structure::Simple.to_json.should eq(%("Simple"))
+      CWE::MappingUsage::AllowedWithReview.to_json.should eq(%("Allowed-with-Review"))
+
+      w = CWE.find!(79)
+      j = JSON.parse(w.to_json).as_h
+      j["abstraction"].as_s.should eq(w.abstraction.to_json.strip('"'))
+      j["status"].as_s.should eq(w.status.to_json.strip('"'))
+    end
+
+    it "reads label enums back, tolerating unknown labels" do
+      CWE::Abstraction.from_json(%("Base")).should eq(CWE::Abstraction::Base)
+      CWE::MappingUsage.from_json(%("Allowed-with-Review"))
+        .should eq(CWE::MappingUsage::AllowedWithReview)
+      CWE::Status.from_json(%("Some-Future-Label")).should eq(CWE::Status::Other)
+    end
+
+    it "round-trips MappingNotes through its own JSON shape" do
+      # Bug: to_json omits empty reasons/suggestions, but from_json required
+      # them — the library could not read back what it had just written.
+      original = CWE.find!(79).mapping_notes.not_nil!
+      CWE::MappingNotes.from_json(original.to_json).usage.should eq(original.usage)
+
+      bare = CWE::MappingNotes.new(usage: CWE::MappingUsage::AllowedWithReview)
+      restored = CWE::MappingNotes.from_json(bare.to_json)
+      restored.usage.should eq(CWE::MappingUsage::AllowedWithReview)
+      restored.reasons.should be_empty
+      restored.suggestions.should be_empty
+    end
+
     it "emits relatedAttackPatterns as an int array" do
       j = JSON.parse(CWE.find!(79).to_json).as_h
       j["relatedAttackPatterns"].as_a.all?(&.as_i?).should be_true
