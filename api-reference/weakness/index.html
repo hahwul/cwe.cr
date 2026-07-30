@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CWE::Weakness — the primary catalog entry type">
+  <title>Weakness - cwe.cr</title>
+  <script>(function(){try{var t=localStorage.getItem("hwaro-theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}})()</script>
+  <meta property="og:title" content="Weakness">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://cwe.cr.hahwul.com/api-reference/weakness/">
+  <meta property="og:description" content="CWE::Weakness — the primary catalog entry type">
+  <meta property="og:image" content="https://cwe.cr.hahwul.com/og-images/api-reference-weakness.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Weakness">
+  <meta name="twitter:description" content="CWE::Weakness — the primary catalog entry type">
+  <meta name="twitter:image" content="https://cwe.cr.hahwul.com/og-images/api-reference-weakness.png">
+  <link rel="canonical" href="https://cwe.cr.hahwul.com/api-reference/weakness/">
+  <link rel="stylesheet" href="https://cwe.cr.hahwul.com/css/style.css">
+  
+  <meta name="apple-mobile-web-app-title" content="cwe.cr">
+
+</head>
+<body data-section="api-reference">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="docs-header">
+  <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="sidebar">
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5h12M2 8h12M2 11.5h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+  </button>
+  <a href="https://cwe.cr.hahwul.com/" class="logo">cwe.cr <span>Documentation</span></a>
+  <nav class="header-nav" aria-label="Sections">
+    <a href="https://cwe.cr.hahwul.com/user-guide/">User Guide</a><a href="https://cwe.cr.hahwul.com/api-reference/" class="active">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" type="button" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>&#8984;K</kbd>
+    </button>
+    <button class="theme-toggle" type="button" data-mode="auto" aria-label="Theme: auto" title="Theme: auto">
+      <svg class="tt-auto" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>
+      <svg class="tt-light" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 .9v2M8 13.1v2M.9 8h2M13.1 8h2M2.98 2.98l1.42 1.42M11.6 11.6l1.42 1.42M13.02 2.98L11.6 4.4M4.4 11.6l-1.42 1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <svg class="tt-dark" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 9.9A5.8 5.8 0 0 1 6.1 2.6a5.8 5.8 0 1 0 7.3 7.3z" fill="currentColor"/></svg>
+    </button>
+    <a class="gh-link" href="https://github.com/hahwul/cwe.cr" aria-label="GitHub repository">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+    </a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="searchInput" aria-label="Search" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+<aside class="docs-sidebar" id="sidebar">
+
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">User Guide</div>
+    <ul class="sidebar-links">
+      <li><a href="https://cwe.cr.hahwul.com/user-guide/">Overview</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/user-guide/lookups/">Lookups</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/user-guide/relationships/">Relationships</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/user-guide/search-and-filters/">Search &amp; Filters</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/user-guide/categories-and-views/">Categories &amp; Views</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/user-guide/json-output/">JSON Output</a></li>
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">API Reference</div>
+    <ul class="sidebar-links">
+      <li><a href="https://cwe.cr.hahwul.com/api-reference/">Overview</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/api-reference/module/">CWE module</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/api-reference/weakness/" class="active" aria-current="page">Weakness</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/api-reference/catalog/">Catalog</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/api-reference/category/">Category</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/api-reference/view/">View</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/api-reference/types/">Types</a></li>
+      
+      <li><a href="https://cwe.cr.hahwul.com/api-reference/errors/">Errors</a></li>
+      
+    </ul>
+  </div>
+  
+</aside>
+<div class="sidebar-scrim"></div>
+  <main id="main" class="docs-main">
+    <h1>Weakness</h1>
+    <p class="lede">CWE::Weakness — the primary catalog entry type</p>
+    <p><code>CWE::Weakness</code> represents a single CWE entry. Instances are constructed
+once when the embedded catalog is loaded and are then immutable.</p>
+<h2 id="fields">Fields</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>Int32</code></td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td><code>String</code></td>
+</tr>
+<tr>
+<td><code>cwe_id</code></td>
+<td><code>String</code> — <code>&quot;CWE-79&quot;</code></td>
+</tr>
+<tr>
+<td><code>url</code></td>
+<td><code>String</code> — <code>https://cwe.mitre.org/data/definitions/79.html</code></td>
+</tr>
+<tr>
+<td><code>abstraction</code></td>
+<td><code>CWE::Abstraction</code></td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>CWE::Status</code></td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td><code>String?</code></td>
+</tr>
+<tr>
+<td><code>extended_description</code></td>
+<td><code>String?</code></td>
+</tr>
+<tr>
+<td><code>likelihood_of_exploit</code></td>
+<td><code>String?</code></td>
+</tr>
+<tr>
+<td><code>related_weaknesses</code></td>
+<td><code>Array(Related)</code></td>
+</tr>
+<tr>
+<td><code>ordinalities</code></td>
+<td><code>Array(Ordinality)</code></td>
+</tr>
+<tr>
+<td><code>applicable_platforms</code></td>
+<td><code>Array(ApplicablePlatform)</code></td>
+</tr>
+<tr>
+<td><code>alternate_terms</code></td>
+<td><code>Array(AlternateTerm)</code></td>
+</tr>
+<tr>
+<td><code>modes_of_introduction</code></td>
+<td><code>Array(ModeOfIntroduction)</code></td>
+</tr>
+<tr>
+<td><code>common_consequences</code></td>
+<td><code>Array(Consequence)</code></td>
+</tr>
+<tr>
+<td><code>detection_methods</code></td>
+<td><code>Array(DetectionMethod)</code></td>
+</tr>
+<tr>
+<td><code>potential_mitigations</code></td>
+<td><code>Array(Mitigation)</code></td>
+</tr>
+<tr>
+<td><code>observed_examples</code></td>
+<td><code>Array(ObservedExample)</code></td>
+</tr>
+<tr>
+<td><code>taxonomy_mappings</code></td>
+<td><code>Array(TaxonomyMapping)</code></td>
+</tr>
+<tr>
+<td><code>related_attack_patterns</code></td>
+<td><code>Array(Int32)</code> — CAPEC ids</td>
+</tr>
+<tr>
+<td><code>notes</code></td>
+<td><code>Array(Note)</code></td>
+</tr>
+<tr>
+<td><code>background_details</code></td>
+<td><code>Array(String)</code></td>
+</tr>
+<tr>
+<td><code>functional_areas</code></td>
+<td><code>Array(String)</code></td>
+</tr>
+<tr>
+<td><code>affected_resources</code></td>
+<td><code>Array(String)</code></td>
+</tr>
+<tr>
+<td><code>exploitation_factors</code></td>
+<td><code>Array(String)</code></td>
+</tr>
+<tr>
+<td><code>raw_abstraction</code></td>
+<td><code>String?</code> — original CSV value</td>
+</tr>
+<tr>
+<td><code>raw_status</code></td>
+<td><code>String?</code> — original CSV value</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="/api-reference/types/">Types</a> for the nested struct definitions.</p>
+<h2 id="edge-helpers">Edge helpers</h2>
+<pre><code class="language-crystal hljs">w.related_with(<span class="hljs-string">&quot;</span><span class="hljs-string">ChildOf</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)     <span class="hljs-comment"># Array(Related)</span>
+w.parent_relations            <span class="hljs-comment"># alias for related_with(&quot;ChildOf&quot;)</span>
+w.child_relations             <span class="hljs-comment"># ParentOf edges (rare; use Catalog#children_of)</span>
+w.peer_relations              <span class="hljs-comment"># PeerOf</span>
+w.can_precede_relations       <span class="hljs-comment"># CanPrecede</span>
+w.can_follow_relations        <span class="hljs-comment"># CanFollow</span>
+</code></pre>
+<h2 id="convenience-accessors">Convenience accessors</h2>
+<pre><code class="language-crystal hljs">w.owasp_mappings  <span class="hljs-comment"># TaxonomyMapping entries with taxonomy_name starting with &quot;OWASP&quot;</span>
+w.capec_ids       <span class="hljs-comment"># alias for related_attack_patterns</span>
+w.deprecated?     <span class="hljs-comment"># true if status is Deprecated or name starts with &quot;DEPRECATED:&quot;</span>
+w.summary         <span class="hljs-comment"># &quot;CWE-79: Improper Neutralization of Input ... (Base, Stable)&quot;</span>
+</code></pre>
+<h2 id="comparable-equality-hash">Comparable, Equality, Hash</h2>
+<p><code>Weakness</code> includes <code>Comparable(Weakness)</code> and is ordered by numeric id.
+Equality is by id, so cross-catalog instances with the same id compare
+equal and hash the same:</p>
+<pre><code class="language-crystal hljs">[<span class="hljs-variable constant_">CWE</span>.find!(<span class="hljs-number">79</span>), <span class="hljs-variable constant_">CWE</span>.find!(<span class="hljs-number">20</span>)].sort.first.id  <span class="hljs-comment"># =&gt; 20</span>
+<span class="hljs-variable constant_">CWE</span>.find!(<span class="hljs-number">79</span>) <span class="hljs-operator">==</span> <span class="hljs-variable constant_">CWE</span>.find!(<span class="hljs-string">&quot;</span><span class="hljs-string">CWE-79</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)          <span class="hljs-comment"># =&gt; true</span>
+
+set <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Set</span>(<span class="hljs-variable constant_">CWE</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Weakness</span>).new
+set <span class="hljs-operator">&lt;&lt;</span> <span class="hljs-variable constant_">CWE</span>.find!(<span class="hljs-number">79</span>)
+set <span class="hljs-operator">&lt;&lt;</span> <span class="hljs-variable constant_">CWE</span>.find!(<span class="hljs-string">&quot;</span><span class="hljs-string">CWE-79</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)
+set.size <span class="hljs-comment"># =&gt; 1</span>
+</code></pre>
+<h2 id="json">JSON</h2>
+<pre><code class="language-crystal hljs">w.to_json <span class="hljs-comment"># =&gt; camelCase JSON, see /user-guide/json-output/</span>
+</code></pre>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="/api-reference/types/">Types</a> — nested struct types</li>
+<li><a href="/api-reference/catalog/">Catalog</a> — how Weaknesses are constructed</li>
+</ul>
+
+    
+    <nav class="page-nav" aria-label="Adjacent pages">
+      
+      <a class="page-nav-link page-nav-prev" href="https://cwe.cr.hahwul.com/api-reference/module/" rel="prev">
+        <span class="page-nav-label">Previous</span>
+        <span class="page-nav-title">CWE module</span>
+      </a>
+      
+      
+      <a class="page-nav-link page-nav-next" href="https://cwe.cr.hahwul.com/api-reference/catalog/" rel="next">
+        <span class="page-nav-label">Next</span>
+        <span class="page-nav-title">Catalog</span>
+      </a>
+      
+    </nav>
+    
+    <div class="docs-footer">
+      <p>cwe.cr documentation</p>
+      <div class="docs-footer-links">
+        <a href="https://github.com/hahwul/cwe.cr">GitHub</a>
+        <a href="https://github.com/hahwul/hwaro">Built with Hwaro</a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cwe.cr.hahwul.com/js/search.js"></script>
+<script>
+(function () {
+  var KEY = "hwaro-theme";
+  var MODES = ["auto", "light", "dark"];
+  var root = document.documentElement;
+  var btn = document.querySelector(".theme-toggle");
+  if (!btn) return;
+  function apply(mode) {
+    if (mode === "auto") {
+      root.removeAttribute("data-theme");
+      try { localStorage.removeItem(KEY); } catch (e) {}
+    } else {
+      root.setAttribute("data-theme", mode);
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+    }
+    btn.setAttribute("data-mode", mode);
+    btn.setAttribute("aria-label", "Theme: " + mode);
+    btn.title = "Theme: " + mode;
+  }
+  var stored = "auto";
+  try { var t = localStorage.getItem(KEY); if (t === "light" || t === "dark") stored = t; } catch (e) {}
+  btn.addEventListener("click", function () {
+    apply(MODES[(MODES.indexOf(btn.getAttribute("data-mode")) + 1) % MODES.length]);
+  });
+  apply(stored);
+})();
+(function () {
+  var btn = document.querySelector(".nav-toggle");
+  var scrim = document.querySelector(".sidebar-scrim");
+  var sidebar = document.getElementById("sidebar");
+  if (!btn) return;
+  function set(open) {
+    document.body.classList.toggle("nav-open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  btn.addEventListener("click", function () {
+    set(!document.body.classList.contains("nav-open"));
+  });
+  if (scrim) scrim.addEventListener("click", function () { set(false); });
+  if (sidebar) sidebar.addEventListener("click", function (e) {
+    if (e.target.closest("a")) set(false);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") set(false);
+  });
+})();
+</script>
+
+</body>
+</html>

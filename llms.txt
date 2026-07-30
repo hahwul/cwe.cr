@@ -1,0 +1,29 @@
+# cwe.cr
+
+> A Crystal implementation of the MITRE CWE (Common Weakness Enumeration)
+
+This is the documentation for cwe.cr, a Crystal library that embeds the full MITRE CWE (Common Weakness Enumeration) catalog and exposes lookup, search, relationship traversal, and JSON serialization.
+
+## Pages
+
+- [cwe.cr](https://cwe.cr.hahwul.com/): A Crystal implementation of the MITRE CWE (Common Weakness Enumeration)
+
+## API Reference
+
+- [Catalog](https://cwe.cr.hahwul.com/api-reference/catalog/): CWE::Catalog — the in-memory CWE catalog
+- [Category](https://cwe.cr.hahwul.com/api-reference/category/): CWE::Category — informal grouping of weaknesses
+- [Errors](https://cwe.cr.hahwul.com/api-reference/errors/): Exception types raised by cwe.cr
+- [CWE module](https://cwe.cr.hahwul.com/api-reference/module/): Top-level CWE module helpers
+- [Types](https://cwe.cr.hahwul.com/api-reference/types/): Enums and nested struct types
+- [View](https://cwe.cr.hahwul.com/api-reference/view/): CWE::View — a catalog slice for a particular stakeholder
+- [Weakness](https://cwe.cr.hahwul.com/api-reference/weakness/): CWE::Weakness — the primary catalog entry type
+
+## User Guide
+
+- [Categories & Views](https://cwe.cr.hahwul.com/user-guide/categories-and-views/): Beyond Weaknesses — MITRE Categories and Views
+- [Getting Started](https://cwe.cr.hahwul.com/user-guide/getting-started/): Install cwe.cr and look up your first CWE entry
+- [JSON Output](https://cwe.cr.hahwul.com/user-guide/json-output/): Serializing Weakness entries to JSON for SBOM / SARIF tooling
+- [Lookups](https://cwe.cr.hahwul.com/user-guide/lookups/): Looking up CWE entries by id — raising and non-raising variants
+- [Relationships](https://cwe.cr.hahwul.com/user-guide/relationships/): Walking the CWE hierarchy — parents, children, ancestors, pillars
+- [Search & Filters](https://cwe.cr.hahwul.com/user-guide/search-and-filters/): Full-text search and abstraction/status filtering across the catalog
+
