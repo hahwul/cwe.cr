@@ -38,6 +38,13 @@ module CWE
       false # Categories are always Mapping_Prohibited per MITRE policy.
     end
 
+    # True if the catalog marks this category deprecated. 35 of the 422
+    # categories in CWE 4.20 are; MITRE keeps them numbered so old references
+    # still resolve, and renames them with a `DEPRECATED:` prefix.
+    def deprecated? : Bool
+      @status == Status::Deprecated || @name.starts_with?("DEPRECATED:")
+    end
+
     def cwe_id : String
       "CWE-#{@id}"
     end
@@ -94,7 +101,7 @@ module CWE
 
     getter id : Int32
     getter name : String
-    # MITRE view types: `"Graph"`, `"Slice"`, `"Explicit Slice"`, `"Implicit Slice"`.
+    # MITRE's `ViewTypeEnumeration`: `"Graph"`, `"Explicit"`, `"Implicit"`.
     getter type : String?
     getter status : Status
     getter objective : String?
@@ -124,6 +131,11 @@ module CWE
 
     def mappable? : Bool
       false # Views are always Mapping_Prohibited per MITRE policy.
+    end
+
+    # True if the catalog marks this view deprecated; see `Category#deprecated?`.
+    def deprecated? : Bool
+      @status == Status::Deprecated || @name.starts_with?("DEPRECATED:")
     end
 
     def cwe_id : String
