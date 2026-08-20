@@ -110,8 +110,8 @@ module CWE
     end
 
     # Edges of the form `ParentOf` — children that point back at this entry.
-    # Note that the MITRE CSV usually expresses the relationship from the
-    # child's side, so use `Catalog#children_of` for a complete answer.
+    # MITRE expresses the relationship from the child's side, so as of CWE 4.20
+    # this is empty for every entry; use `Catalog#children_of` for the answer.
     def child_relations : Array(Related)
       related_with("ParentOf")
     end
@@ -120,12 +120,32 @@ module CWE
       related_with("PeerOf")
     end
 
+    # Chain edges: this weakness can precede / follow another in a chain.
+    # As with `ParentOf`, MITRE records chains from one side only, so
+    # `can_follow_relations` is empty across CWE 4.20 — the inverse of a
+    # `CanPrecede` edge has to be found on the other entry.
     def can_precede_relations : Array(Related)
       related_with("CanPrecede")
     end
 
     def can_follow_relations : Array(Related)
       related_with("CanFollow")
+    end
+
+    # `CanAlsoBe` — the weakness may be described by another entry in some
+    # circumstances.
+    def can_also_be_relations : Array(Related)
+      related_with("CanAlsoBe")
+    end
+
+    # `Requires` / `StartsWith` — the composite and chain members MITRE lists
+    # on `Compound` entries (`Structure` of `Composite` / `Chain`).
+    def requires_relations : Array(Related)
+      related_with("Requires")
+    end
+
+    def starts_with_relations : Array(Related)
+      related_with("StartsWith")
     end
 
     # OWASP entries in `taxonomy_mappings`.

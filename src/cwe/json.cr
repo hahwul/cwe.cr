@@ -228,6 +228,13 @@ module CWE
     def to_json(json : ::JSON::Builder) : Nil
       json.object do
         json.field "usage", @usage.to_s
+        # `raw_usage` only carries information when the source label is one
+        # `MappingUsage` does not know — a future MITRE value that parsed as
+        # `Other`. Emitting it in that case keeps the round-trip lossless
+        # without repeating `usage` on every entry in the current catalog.
+        if raw = @raw_usage
+          json.field "rawUsage", raw unless raw == @usage.to_s
+        end
         if r = @rationale
           json.field "rationale", r
         end

@@ -59,7 +59,7 @@ Each `CWE::Weakness` exposes:
 | `status` | `CWE::Status` (`Stable`, `Draft`, `Incomplete`, `Deprecated`, …) |
 | `description`, `extended_description` | `String?` |
 | `likelihood_of_exploit` | `String?` |
-| `related_weaknesses` | `Array(CWE::Related)` — `ChildOf` / `ParentOf` / `PeerOf` / `CanPrecede` / `CanFollow` |
+| `related_weaknesses` | `Array(CWE::Related)` — `ChildOf` / `PeerOf` / `CanPrecede` / `CanAlsoBe` / `Requires` / `StartsWith` |
 | `common_consequences` | `Array(CWE::Consequence)` — scope + impact + note |
 | `potential_mitigations` | `Array(CWE::Mitigation)` — phase + strategy + description |
 | `detection_methods` | `Array(CWE::DetectionMethod)` |
@@ -149,6 +149,13 @@ CWE.ancestors_of("CWE-79")
 CWE.descendants_of("CWE-79", max_depth: 1)
 ```
 
+`parents_of` / `ancestors_of` follow every `ChildOf` edge unless you filter
+them with `view_id`. `pillar_of` is different: MITRE places the `Pillar` tier
+only in the Research view, so the walk prefers view-1000 edges over edges
+borrowed from another view, and MITRE's `Primary` ordinal over the secondary
+parents. That is what makes `CWE.pillar_of(15)` answer `CWE-664` rather than
+following CWE-15's 7PK (view 700) edge up to `CWE-707`.
+
 ### Search
 
 ```crystal
@@ -186,6 +193,16 @@ the catalog organised around a stakeholder's perspective).
 CWE.category!(227)  # => CWE::Category: "7PK - API Abuse" (10 members)
 CWE.view!(1000)     # => CWE::View: "Research Concepts" (Graph)
 CWE.members_of(1000) # => Array(CWE::Weakness) — the resolved members
+
+# MITRE retires far more Categories and Views than Weaknesses (35 and 4 in
+# CWE 4.20); both expose the same predicate a Weakness does:
+CWE.category!(1).deprecated? # => true ("DEPRECATED: Location")
+CWE.view!(630).deprecated?   # => true
+
+# `members_of` resolves only the Weakness members. Views built out of
+# Categories (699 = Software Development, 1194 = Hardware Design) have none,
+# so reach for the raw edges there:
+CWE.view!(699).members.map { |m| CWE.entry(m.cwe_id) }
 
 # Unified lookup when you don't know which kind of entity an id refers to:
 CWE.entry(79)    # => Weakness

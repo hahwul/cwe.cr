@@ -94,11 +94,26 @@ module CWE
       end
     end
 
+    # MITRE places the `Pillar` tier only in the Research view. Edges declared
+    # by any other view (7PK, Simplified Mapping, CISQ, Hardware Design) belong
+    # to a different hierarchy, so `pillar_of` follows them only as a last
+    # resort.
+    RESEARCH_VIEW_ID = 1000
+
     # Build a `Catalog` from a JSON document with the schema produced by
     # `data/build_data.cr`. Useful for testing and for callers that ship
     # their own subset.
+    #
+    # A document that is not valid JSON raises `CWE::Error` (with the parser's
+    # message and the `JSON::ParseException` as its cause) rather than letting
+    # the parse error escape — every other failure mode here is already a
+    # `CWE::Error`, and callers should only need to rescue the one type.
     def self.from_json(input : String | IO) : Catalog
-      doc = ::JSON.parse(input)
+      doc = begin
+        ::JSON.parse(input)
+      rescue ex : ::JSON::ParseException
+        raise CWE::Error.new("malformed CWE document: #{ex.message}", cause: ex)
+      end
       unless doc.as_h?
         raise CWE::Error.new("malformed CWE document: top level must be an object")
       end
@@ -739,8 +754,15 @@ module CWE
     # O(children); when `view_id` is given, only children whose `ChildOf`
     # edge belongs to that view are returned. The returned array is a copy of
     # the index bucket, so mutating it does not disturb the catalog.
+    #
+    # An id that is not itself a weakness in this catalog is a miss, the same
+    # way `parents_of` reports one: the two are inverse walks over the catalog's
+    # entries, so a dangling `ChildOf` target must not resolve in one direction
+    # only. (MITRE's catalog has no dangling targets; a hand-built or filtered
+    # document can.)
     def children_of(id : Int, view_id : Int? = nil) : Array(Weakness)
       target = narrow_id(id) || return [] of Weakness
+      return [] of Weakness unless @by_id.has_key?(target)
       kids = @children_index[target]? || return [] of Weakness
       if v = view_id
         vid = narrow_id(v) || return [] of Weakness
@@ -808,15 +830,52 @@ module CWE
 
     # The pillar (top-level entry) reached by walking `ChildOf` edges from
     # `id`. Returns the entry itself if it is already a `Pillar`. Returns
-    # nil if `id` is not in the catalog. If the ancestor chain contains a
-    # `Pillar`, that is returned; otherwise the most distant ancestor is
-    # returned (some chains topple out at a `Class` rather than a `Pillar`).
+    # nil if `id` is not in the catalog. If no `Pillar` is reachable at all the
+    # most distant ancestor is returned instead (some chains top out at a
+    # `Class` rather than a `Pillar`).
+    #
+    # An entry frequently has several parents, and they do not all lead to the
+    # same pillar, so the walk follows MITRE's own ordering: Research-view
+    # (`view 1000`) edges before edges borrowed from another view, and the
+    # `Primary` ordinal before the secondary ones. CWE-15, for example, is
+    # `ChildOf` CWE-642 in view 1000 and `ChildOf` CWE-20 in view 700 (7PK);
+    # only the first belongs to the hierarchy that pillars are defined in.
     def pillar_of(id : Int) : Weakness?
       w = find(id) || return
       return w if w.abstraction == Abstraction::Pillar
-      chain = ancestors_of(id)
-      chain.reverse.find { |a| a.abstraction == Abstraction::Pillar } ||
-        chain.last?
+      # `reject` matters only for a cyclic document, where the walk can come
+      # back around to the entry itself — which is not one of its ancestors.
+      pillar_from(w, Set(Int32){w.id}, 1) ||
+        ancestors_of(id).reject! { |a| a.id == w.id }.last?
+    end
+
+    # Depth-first search for the nearest `Pillar` along `ranked_parent_relations`
+    # order, sharing `seen` across branches so a diamond in the graph is visited
+    # once and a cycle terminates. `max_depth` mirrors the guard on
+    # `ancestors_of`; the real CWE hierarchy is 3-5 levels deep.
+    private def pillar_from(w : Weakness, seen : Set(Int32), depth : Int32,
+                            max_depth : Int32 = 32) : Weakness?
+      return if depth > max_depth
+      ranked_parent_relations(w).each do |r|
+        parent = find(r.cwe_id)
+        next if parent.nil? || seen.includes?(parent.id)
+        seen << parent.id
+        return parent if parent.abstraction == Abstraction::Pillar
+        if found = pillar_from(parent, seen, depth + 1, max_depth)
+          return found
+        end
+      end
+      nil
+    end
+
+    # `ChildOf` edges of `w`, most authoritative first. Ties keep the order the
+    # catalog declared them in, so the walk is deterministic.
+    private def ranked_parent_relations(w : Weakness) : Array(Related)
+      research, other = w.parent_relations.partition { |r| r.view_id == RESEARCH_VIEW_ID }
+      ordered = research.select(&.primary?)
+      ordered.concat(research.reject(&.primary?))
+      ordered.concat(other.select(&.primary?))
+      ordered.concat(other.reject(&.primary?))
     end
 
     def pillar_of(id : String) : Weakness?
