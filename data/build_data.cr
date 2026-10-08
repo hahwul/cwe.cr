@@ -67,14 +67,32 @@ def parse_bare_list(raw : String) : Array(String)
   result
 end
 
-def parse_structured(raw : String, known : Set(String)) : Array(Hash(String, String))
-  result = [] of Hash(String, String)
-  return result if raw.strip.empty?
+# MITRE's CSV joins entries with `::` but never escapes it, so a `::` chunk
+# only starts a new entry when it begins with the column's `lead` field (the
+# one MITRE's schema requires: `Reference` for an Observed_Example,
+# `Taxonomy_Name` for a mapping, ...) — or with any known field for a column
+# without one — and the previous entry does not end in a bare key. Anything
+# else is glued back on: a value containing `::` (`std::auto_ptr`, CWE-69's
+# "Windows ::DATA"), a value ending in `:` (CWE-428's "C:" + `:LINK`), or an
+# empty value (CWE-122's `::PHASE::DESCRIPTION:...`).
+#
+# Keys may repeat within one entry — a Consequence lists several `SCOPE`s and
+# `IMPACT`s — so every value is kept, in order.
+def parse_structured_multi(raw : String, known : Set(String), lead : String? = nil) : Array(Hash(String, Array(String)))
+  entries = [] of String
+  raw.split("::").each do |chunk|
+    next if chunk.strip.empty?
+    first = chunk.split(":").first
+    starts_entry = lead ? first == lead : known.includes?(first)
+    if entries.empty? || (starts_entry && !known.includes?(entries[-1].split(":").last))
+      entries << chunk
+    else
+      entries[-1] += "::#{chunk}"
+    end
+  end
 
-  raw.split("::").each do |entry|
-    next if entry.strip.empty?
-
-    h = {} of String => String
+  entries.compact_map do |entry|
+    h = {} of String => Array(String)
     tokens = entry.split(":")
     i = 0
     while i < tokens.size
@@ -86,15 +104,19 @@ def parse_structured(raw : String, known : Set(String)) : Array(Hash(String, Str
           parts << tokens[j]
           j += 1
         end
-        h[tok] = parts.join(":").strip
+        (h[tok] ||= [] of String) << parts.join(":").strip
         i = j
       else
         i += 1
       end
     end
-    result << h unless h.empty?
+    h unless h.empty?
   end
-  result
+end
+
+# As `parse_structured_multi`, for columns whose keys never repeat.
+def parse_structured(raw : String, known : Set(String), lead : String? = nil) : Array(Hash(String, String))
+  parse_structured_multi(raw, known, lead).map(&.transform_values(&.first))
 end
 
 def take_first(rows : Array(Hash(String, String)), field : String) : String?
@@ -144,19 +166,19 @@ while csv.next
   ext_desc = csv["Extended Description"]
   likelihood = csv["Likelihood of Exploit"]
 
-  related = parse_structured(csv["Related Weaknesses"], RELATED_FIELDS)
-  ordinalities = parse_structured(csv["Weakness Ordinalities"], ORDINALITY_FIELDS)
+  related = parse_structured(csv["Related Weaknesses"], RELATED_FIELDS, "NATURE")
+  ordinalities = parse_structured(csv["Weakness Ordinalities"], ORDINALITY_FIELDS, "ORDINALITY")
   platforms = parse_structured(csv["Applicable Platforms"], PLATFORM_FIELDS)
-  alt_terms = parse_structured(csv["Alternate Terms"], ALT_TERM_FIELDS)
-  intros = parse_structured(csv["Modes Of Introduction"], INTRO_FIELDS)
-  consequences = parse_structured(csv["Common Consequences"], CONSEQUENCE_FIELDS)
-  detections = parse_structured(csv["Detection Methods"], DETECTION_FIELDS)
+  alt_terms = parse_structured(csv["Alternate Terms"], ALT_TERM_FIELDS, "TERM")
+  intros = parse_structured(csv["Modes Of Introduction"], INTRO_FIELDS, "PHASE")
+  consequences = parse_structured_multi(csv["Common Consequences"], CONSEQUENCE_FIELDS, "SCOPE")
+  detections = parse_structured(csv["Detection Methods"], DETECTION_FIELDS, "METHOD")
   mitigations = parse_structured(csv["Potential Mitigations"], MITIGATION_FIELDS)
-  examples = parse_structured(csv["Observed Examples"], EXAMPLE_FIELDS)
-  taxonomies = parse_structured(csv["Taxonomy Mappings"], TAXONOMY_FIELDS)
+  examples = parse_structured(csv["Observed Examples"], EXAMPLE_FIELDS, "REFERENCE")
+  taxonomies = parse_structured(csv["Taxonomy Mappings"], TAXONOMY_FIELDS, "TAXONOMY NAME")
   # CAPEC IDs are encoded as a bare `::N::N::` list, not key/value pairs.
   capecs = parse_bare_list(csv["Related Attack Patterns"])
-  notes = parse_structured(csv["Notes"], NOTE_FIELDS)
+  notes = parse_structured(csv["Notes"], NOTE_FIELDS, "TYPE")
 
   background_details = parse_bare_list(csv["Background Details"])
   functional_areas = parse_bare_list(csv["Functional Areas"])
@@ -229,10 +251,10 @@ while csv.next
   unless consequences.empty?
     arr = consequences.map do |r|
       inner = {} of String => JSON::Any
-      inner["scope"] = JSON::Any.new(r["SCOPE"]? || "")
-      inner["impact"] = JSON::Any.new(r["IMPACT"]? || "") if r["IMPACT"]?
-      inner["likelihood"] = JSON::Any.new(r["LIKELIHOOD"]? || "") if r["LIKELIHOOD"]?
-      inner["note"] = JSON::Any.new(r["NOTE"]? || "") if r["NOTE"]?
+      inner["scopes"] = JSON::Any.new((r["SCOPE"]? || [] of String).map { |v| JSON::Any.new(v) })
+      inner["impacts"] = JSON::Any.new(r["IMPACT"].map { |v| JSON::Any.new(v) }) if r["IMPACT"]?
+      inner["likelihood"] = JSON::Any.new(r["LIKELIHOOD"].first) if r["LIKELIHOOD"]?
+      inner["note"] = JSON::Any.new(r["NOTE"].first) if r["NOTE"]?
       JSON::Any.new(inner)
     end
     h["common_consequences"] = JSON::Any.new(arr)

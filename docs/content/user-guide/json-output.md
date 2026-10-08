@@ -35,7 +35,9 @@ puts CWE.find!(79).to_json
   "alternateTerms": [{"term": "XSS", "description": "..."}],
   "modesOfIntroduction": [{"phase": "Implementation"}],
   "commonConsequences": [
-    {"scope": "Confidentiality", "impact": "Read Application Data", "note": "..."}
+    {"scope": "Access Control", "impact": "Bypass Protection Mechanism", "note": "...",
+     "scopes": ["Access Control", "Confidentiality"],
+     "impacts": ["Bypass Protection Mechanism", "Read Application Data"]}
   ],
   "potentialMitigations": [
     {"phase": "Implementation", "strategy": "Output Encoding", "description": "..."}

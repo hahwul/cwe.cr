@@ -427,12 +427,18 @@ module CWE
       )
     end
 
+    # `scopes` / `impacts` arrays, or the single `scope` / `impact` of a
+    # document written before consequences kept more than one.
     private def self.parse_consequence(x : ::JSON::Any) : Consequence
+      scopes = strings(x, "scopes")
+      impacts = strings(x, "impacts")
       Consequence.new(
-        scope: raw_s(x, "scope") || "",
-        impact: s(x, "impact"),
+        scope: scopes.first? || raw_s(x, "scope") || "",
+        impact: impacts.first? || s(x, "impact"),
         likelihood: s(x, "likelihood"),
         note: s(x, "note"),
+        scopes: scopes,
+        impacts: impacts,
       )
     end
 

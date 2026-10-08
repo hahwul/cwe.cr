@@ -4,6 +4,18 @@
 
 ### Fixed
 
+- `Consequence` kept only the last `Scope` and `Impact` of each consequence,
+  though MITRE's schema allows several of each (527 of the 944 embedded
+  entries lost data; CWE-79's first consequence reported `Confidentiality` /
+  `Read Application Data` and dropped `Access Control` / `Bypass Protection
+  Mechanism`). New `scopes` / `impacts` hold every value in order; `scope` /
+  `impact` are now the first of each.
+- MITRE's CSV does not escape its `::` entry separator, and the build split on
+  every occurrence: a value containing `::` (`std::auto_ptr`, CWE-69's
+  `Windows ::DATA`) was truncated, a value ending in `:` left five weaknesses
+  (CWE-66, 69, 428, 696, 789) with an observed example missing its link plus a
+  bogus one with an empty reference, and an empty phase split 36 mitigations
+  (CWE-122, …) into a phase-only and a description-only half.
 - `pillar_of` merged the `ChildOf` edges of every CWE view and then picked
   whichever `Pillar` happened to sit last in the traversal, so 188 of the 944
   embedded entries reported a pillar from a hierarchy they do not belong to
