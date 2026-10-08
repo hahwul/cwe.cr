@@ -14,9 +14,9 @@ w.abstraction # => CWE::Abstraction::Base
 w.status      # => CWE::Status::Stable
 w.url         # => "https://cwe.mitre.org/data/definitions/79.html"
 
-w.common_consequences.first.scope # => "Confidentiality"
-w.potential_mitigations.size      # => 12
-w.parent_relations.map(&.cwe_id)  # => [74, 74]
+w.common_consequences.first.scopes # => ["Access Control", "Confidentiality"]
+w.potential_mitigations.size       # => 12
+w.parent_relations.map(&.cwe_id)   # => [74, 74]
 ```
 
 ## Installation
@@ -60,7 +60,7 @@ Each `CWE::Weakness` exposes:
 | `description`, `extended_description` | `String?` |
 | `likelihood_of_exploit` | `String?` |
 | `related_weaknesses` | `Array(CWE::Related)` — `ChildOf` / `PeerOf` / `CanPrecede` / `CanAlsoBe` / `Requires` / `StartsWith` |
-| `common_consequences` | `Array(CWE::Consequence)` — scope + impact + note |
+| `common_consequences` | `Array(CWE::Consequence)` — scopes + impacts + note |
 | `potential_mitigations` | `Array(CWE::Mitigation)` — phase + strategy + description |
 | `detection_methods` | `Array(CWE::DetectionMethod)` |
 | `observed_examples` | `Array(CWE::ObservedExample)` — CVE references |

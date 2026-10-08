@@ -60,7 +60,7 @@ w.abstraction # => CWE::Abstraction::Base
 w.status      # => CWE::Status::Stable
 w.url         # => "https://cwe.mitre.org/data/definitions/79.html"
 
-w.common_consequences.first.scope # => "Confidentiality"
+w.common_consequences.first.scopes   # => ["Access Control", "Confidentiality"]
 w.parent_relations.map(&.cwe_id).uniq # => [74]
 CWE.pillar_of(79).try(&.cwe_id)       # => "CWE-707"
 ```

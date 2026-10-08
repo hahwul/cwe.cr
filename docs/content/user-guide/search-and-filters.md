@@ -72,7 +72,7 @@ Combine with `Enumerable` methods as needed:
 
 ```crystal
 CWE.with_abstraction(CWE::Abstraction::Base)
-   .select(&.common_consequences.any? { |c| c.scope == "Confidentiality" })
+   .select(&.common_consequences.any?(&.scopes.includes?("Confidentiality")))
    .first(10)
 ```
 

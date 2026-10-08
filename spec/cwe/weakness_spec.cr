@@ -138,4 +138,52 @@ describe CWE::Weakness do
       w.url.should eq("https://cwe.mitre.org/data/definitions/1004.html")
     end
   end
+
+  describe "structured CSV columns" do
+    # Bug: the build kept one value per key, so a Consequence listing several
+    # `Scope`s / `Impact`s (cwe_schema_v7.3: both maxOccurs="unbounded") kept
+    # only the last of each.
+    it "keeps every Scope and Impact of a consequence, in order" do
+      c = CWE.find!(79).common_consequences.first
+      c.scopes.should eq(["Access Control", "Confidentiality"])
+      c.impacts.should eq(["Bypass Protection Mechanism", "Read Application Data"])
+      c.scope.should eq("Access Control")
+      c.impact.should eq("Bypass Protection Mechanism")
+    end
+
+    it "reads a document that carries a single scope / impact" do
+      doc = {"weaknesses" => [{"id" => 1, "common_consequences" => [
+        {"scope" => "Integrity", "impact" => "Modify Memory"},
+      ]}]}.to_json
+      c = CWE::Catalog.from_json(doc).find!(1).common_consequences.first
+      c.scopes.should eq(["Integrity"])
+      c.impacts.should eq(["Modify Memory"])
+
+      legacy = CWE::Consequence.from_json(%({"scope":"Integrity","impact":"Modify Memory"}))
+      legacy.scopes.should eq(["Integrity"])
+      legacy.impacts.should eq(["Modify Memory"])
+    end
+
+    # Bug: a value containing `::` was split as if it were the entry
+    # separator, leaving a truncated entry plus a bogus one.
+    it "keeps a value that contains the entry separator" do
+      CWE.find!(69).taxonomy_mappings.map(&.entry_name)
+        .should eq(["Windows ::DATA alternate data stream"])
+      ex = CWE.find!(428).observed_examples.find!(&.reference.==("CVE-2005-2938"))
+      ex.description.should eq("CreateProcess() and CreateProcessAsUser() can be misused by applications to allow program.exe style attacks in C:")
+      ex.link.should eq("https://www.cve.org/CVERecord?id=CVE-2005-2938")
+      CWE.all.flat_map(&.observed_examples).none?(&.reference.empty?).should be_true
+
+      CWE.find!(401).potential_mitigations
+        .any?(&.description.try(&.includes?("std::auto_ptr"))).should be_true
+    end
+
+    # Bug: an empty value (`::PHASE::DESCRIPTION:...`) read as an entry break.
+    it "keeps a mitigation whose phase is empty in one piece" do
+      m = CWE.find!(122).potential_mitigations.first
+      m.phase.should be_nil
+      m.description.should eq("Pre-design: Use a language or compiler that performs automatic bounds checking.")
+      CWE.all.flat_map(&.potential_mitigations).none?(&.description.nil?).should be_true
+    end
+  end
 end

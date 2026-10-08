@@ -56,10 +56,12 @@ rel.primary? # => ordinal == "Primary"
 
 ```crystal
 struct CWE::Consequence
-  scope      : String   # "Confidentiality", "Integrity", "Availability", "Access Control", "Authentication", …
-  impact     : String?
+  scope      : String          # first of `scopes`
+  impact     : String?         # first of `impacts`
   likelihood : String?
   note       : String?
+  scopes     : Array(String)   # "Confidentiality", "Integrity", "Availability", "Access Control", …
+  impacts    : Array(String)   # "Read Application Data", "Bypass Protection Mechanism", …
 end
 ```
 

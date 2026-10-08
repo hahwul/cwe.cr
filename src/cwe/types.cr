@@ -232,12 +232,27 @@ module CWE
   struct Consequence
     include JSON::Serializable
 
+    # The first listed `Scope` / `Impact`. MITRE's schema allows several of
+    # each per consequence; `scopes` / `impacts` hold all of them, in order.
     getter scope : String
     getter impact : String?
     getter likelihood : String?
     getter note : String?
+    getter scopes : Array(String) = [] of String
+    getter impacts : Array(String) = [] of String
 
-    def initialize(@scope, @impact = nil, @likelihood = nil, @note = nil)
+    def initialize(@scope, @impact = nil, @likelihood = nil, @note = nil,
+                   @scopes = [] of String, @impacts = [] of String)
+      after_initialize
+    end
+
+    # JSON written before `scopes` / `impacts` existed carries only the
+    # single `scope` / `impact`; JSON::Serializable calls this after reading.
+    def after_initialize
+      @scopes = [@scope] if @scopes.empty? && !@scope.empty?
+      if @impacts.empty? && (i = @impact)
+        @impacts = [i]
+      end
     end
   end
 

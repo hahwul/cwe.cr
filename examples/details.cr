@@ -22,7 +22,7 @@ end
 
 puts "\nCommon consequences:"
 w.common_consequences.each do |c|
-  puts "  • #{c.scope}: #{c.impact}"
+  puts "  • #{c.scopes.join(", ")}: #{c.impacts.join(", ")}"
   puts "      #{c.note}" if c.note
 end
 
