@@ -209,6 +209,11 @@ describe CWE::Weakness do
         PY
     end
 
+    it "keeps the spacing inside a line of code" do
+      CWE.find!(1243).demonstrative_examples.flat_map(&.example_code)
+        .flat_map(&.code.lines).should contain("assign key_big0    = debug_mode_i ? 192'b0 : {key0[0],")
+    end
+
     it "collapses layout whitespace in prose, as MITRE's CSV export does" do
       layout = /[\t\n]|  /
       CWE.all.each do |w|
@@ -218,7 +223,17 @@ describe CWE::Weakness do
         end
         w.references.each { |r| r.section.try(&.should_not match(layout)) }
       end
+      notes = CWE.categories.flat_map(&.notes) + CWE.views.flat_map(&.notes)
+      notes.each { |n| n.note.try(&.should_not match(layout)) }
+      (CWE.all + CWE.categories + CWE.views).each do |e|
+        e.mapping_notes.try do |m|
+          m.rationale.try(&.should_not match(layout))
+          m.comments.try(&.should_not match(layout))
+        end
+      end
       CWE.categories.each { |c| c.summary.try(&.should_not match(layout)) }
+      CWE.views.each { |v| v.objective.try(&.should_not match(layout)) }
+      CWE.external_references.each { |r| r.title.try(&.should_not match(layout)) }
       CWE.find!(862).references.find!(&.section.try(&.includes?("Determining")))
         .section.should eq(%(Chapter 4, "Authorization" Page 114; Chapter 6, "Determining Appropriate Access Control" Page 171))
     end

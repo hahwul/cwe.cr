@@ -376,9 +376,8 @@ view_extras = {} of Int32 => Hash(String, JSON::Any)
 
 # MITRE writes Example_Code, Intro_Text, Body_Text, Notes, … as xhtml and
 # pretty-prints the XML around it, so the newlines and tabs in their text
-# nodes are layout, not content. Both renderers below read the markup the way
-# a browser lays it out: whitespace runs collapse, and only the markup decides
-# where a line or paragraph ends.
+# nodes that span a source line break are layout, not content. Both renderers
+# below let only the markup decide where a line or paragraph ends.
 XHTML_ASCII_WS = /[ \t\r\n]+/
 XHTML_BLOCKS   = Set{"div", "p", "li", "ul", "ol", "table", "thead", "tbody", "tr"}
 
@@ -428,9 +427,11 @@ class CodeRenderer
     end
   end
 
+  # Only a run that spans a source line break is pretty-printing; spaces
+  # inside a line (column alignment, `"a  b"` literals) are the author's.
   private def text(s : String) : Nil
-    s = s.gsub(XHTML_ASCII_WS, " ")
-    s = s.lstrip(' ') if @line.empty? || @line.ends_with?(' ')
+    s = s.gsub(/[ \t]*[\r\n][ \t\r\n]*/, " ")
+    s = s.lstrip if @line.empty?
     return if s.empty?
     @line_depth = @depth if @line.empty?
     @line += s
