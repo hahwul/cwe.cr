@@ -374,28 +374,101 @@ external_refs = [] of Hash(String, JSON::Any)
 category_extras = {} of Int32 => Hash(String, JSON::Any)
 view_extras = {} of Int32 => Hash(String, JSON::Any)
 
-# Collapse the xhtml content of a `<xhtml:div>` (used inside Example_Code)
-# into a plain string. `<xhtml:br/>` becomes a newline; other tags are
-# stripped but their text content is preserved.
-def render_xhtml(node : XML::Node) : String
+# MITRE writes Example_Code, Intro_Text, Body_Text, Notes, … as xhtml and
+# pretty-prints the XML around it, so the newlines and tabs in their text
+# nodes that span a source line break are layout, not content. Both renderers
+# below let only the markup decide where a line or paragraph ends.
+XHTML_ASCII_WS = /[ \t\r\n]+/
+XHTML_BLOCKS   = Set{"div", "p", "li", "ul", "ol", "table", "thead", "tbody", "tr"}
+
+# An `<Example_Code>` as lines of code. `<xhtml:br/>` ends a line (an empty
+# one too), a block element starts and ends one, and each
+# `<xhtml:div style="margin-left:1em;">` indents its lines one level — the
+# only way MITRE encodes code indentation, so Python stays valid.
+class CodeRenderer
+  INDENT = "    "
+
+  @lines = [] of String
+  @line = ""
+  @depth = 0
+  @line_depth = 0
+
+  def self.render(node : XML::Node) : String
+    r = new
+    r.walk(node)
+    r.result
+  end
+
+  def result : String
+    end_line(false)
+    @lines.join('\n').strip('\n')
+  end
+
+  def walk(node : XML::Node) : Nil
+    node.children.each do |c|
+      if c.element?
+        name = c.name
+        if name == "br"
+          end_line(true)
+        elsif XHTML_BLOCKS.includes?(name)
+          indented = name == "div" && c["style"]?.try(&.includes?("margin-left"))
+          end_line(false)
+          @depth += 1 if indented
+          walk(c)
+          end_line(false)
+          @depth -= 1 if indented
+        else
+          walk(c)
+          text(" ") if name.in?("td", "th")
+        end
+      elsif c.text? || c.cdata?
+        text(c.content)
+      end
+    end
+  end
+
+  # Only a run that spans a source line break is pretty-printing; spaces
+  # inside a line (column alignment, `"a  b"` literals) are the author's.
+  private def text(s : String) : Nil
+    s = s.gsub(/[ \t]*[\r\n][ \t\r\n]*/, " ")
+    s = s.lstrip if @line.empty?
+    return if s.empty?
+    @line_depth = @depth if @line.empty?
+    @line += s
+  end
+
+  # A hard break (`br`) always ends a line; a block boundary only ends one
+  # that has content, as in HTML.
+  private def end_line(hard : Bool) : Nil
+    line = @line.rstrip(' ')
+    @lines << (line.empty? ? "" : INDENT * @line_depth + line) if hard || !line.empty?
+    @line = ""
+  end
+end
+
+# Running text as one line, the way MITRE's own CSV export flattens the same
+# xhtml: block boundaries and `br` become a space and whitespace collapses.
+def render_prose(node : XML::Node) : String
   io = String::Builder.new
   walk = uninitialized XML::Node -> Nil
   walk = ->(n : XML::Node) do
     n.children.each do |c|
       if c.element?
-        case c.name
-        when "br"
-          io << '\n'
-        else
-          walk.call(c)
-        end
-      else
+        block = c.name == "br" || c.name.in?("td", "th") || XHTML_BLOCKS.includes?(c.name)
+        io << ' ' if block
+        walk.call(c)
+        io << ' ' if block
+      elsif c.text? || c.cdata?
         io << c.content
       end
     end
   end
   walk.call(node)
-  io.to_s.strip
+  collapse_ws(io.to_s)
+end
+
+def collapse_ws(s : String) : String
+  s.gsub(XHTML_ASCII_WS, " ").strip
 end
 
 def child_named(parent : XML::Node, local : String) : XML::Node?
@@ -408,7 +481,7 @@ end
 
 def text_of_child(parent : XML::Node, local : String) : String?
   if c = child_named(parent, local)
-    s = c.content.strip
+    s = render_prose(c)
     s.empty? ? nil : s
   end
 end
@@ -481,7 +554,7 @@ def parse_references(node : XML::Node) : Array(JSON::Any)
     inner = {} of String => JSON::Any
     inner["external_reference_id"] = JSON::Any.new(rid)
     if sec = r["Section"]?
-      inner["section"] = JSON::Any.new(sec)
+      inner["section"] = JSON::Any.new(collapse_ws(sec))
     end
     arr << JSON::Any.new(inner)
   end
@@ -493,7 +566,7 @@ def parse_notes(node : XML::Node) : Array(JSON::Any)
   children_named(node, "Note").each do |n|
     inner = {} of String => JSON::Any
     inner["type"] = JSON::Any.new(n["Type"]? || "")
-    text = n.content.strip
+    text = render_prose(n)
     inner["note"] = JSON::Any.new(text) unless text.empty?
     arr << JSON::Any.new(inner)
   end
@@ -545,13 +618,13 @@ def parse_demonstrative_examples(node : XML::Node) : Array(JSON::Any)
       next unless c.element?
       case c.name
       when "Intro_Text"
-        s = c.content.strip
+        s = render_prose(c)
         intro = s unless s.empty?
       when "Body_Text"
-        s = c.content.strip
+        s = render_prose(c)
         bodies << JSON::Any.new(s) unless s.empty?
       when "Example_Code"
-        rendered = render_xhtml(c)
+        rendered = CodeRenderer.render(c)
         next if rendered.empty?
         ch = {} of String => JSON::Any
         ch["code"] = JSON::Any.new(rendered)
@@ -656,17 +729,17 @@ if xml_path
         er.children.each do |c|
           next unless c.element?
           case c.name
-          when "Author"           then authors << JSON::Any.new(c.content.strip)
-          when "Title"            then entry["title"] = JSON::Any.new(c.content.strip)
-          when "Edition"          then entry["edition"] = JSON::Any.new(c.content.strip)
-          when "Publication"      then entry["publication"] = JSON::Any.new(c.content.strip)
-          when "Publication_Year" then entry["publication_year"] = JSON::Any.new(c.content.strip)
+          when "Author"           then authors << JSON::Any.new(render_prose(c))
+          when "Title"            then entry["title"] = JSON::Any.new(render_prose(c))
+          when "Edition"          then entry["edition"] = JSON::Any.new(render_prose(c))
+          when "Publication"      then entry["publication"] = JSON::Any.new(render_prose(c))
+          when "Publication_Year" then entry["publication_year"] = JSON::Any.new(render_prose(c))
           when "Publication_Month"
-            entry["publication_month"] = JSON::Any.new(c.content.strip)
-          when "Publication_Day" then entry["publication_day"] = JSON::Any.new(c.content.strip)
-          when "Publisher"       then entry["publisher"] = JSON::Any.new(c.content.strip)
-          when "URL"             then entry["url"] = JSON::Any.new(c.content.strip)
-          when "URL_Date"        then entry["url_date"] = JSON::Any.new(c.content.strip)
+            entry["publication_month"] = JSON::Any.new(render_prose(c))
+          when "Publication_Day" then entry["publication_day"] = JSON::Any.new(render_prose(c))
+          when "Publisher"       then entry["publisher"] = JSON::Any.new(render_prose(c))
+          when "URL"             then entry["url"] = JSON::Any.new(render_prose(c))
+          when "URL_Date"        then entry["url_date"] = JSON::Any.new(render_prose(c))
           end
         end
         entry["authors"] = JSON::Any.new(authors) unless authors.empty?
@@ -686,7 +759,7 @@ if xml_path
         cat.children.each do |child|
           next unless child.element?
           case child.name
-          when "Summary"           then summary = child.content.strip
+          when "Summary"           then summary = render_prose(child)
           when "Relationships"     then members = collect_members.call(child)
           when "Notes"             then notes = parse_notes(child)
           when "Taxonomy_Mappings" then taxonomy = parse_taxonomy_mappings(child)
@@ -725,7 +798,7 @@ if xml_path
         view.children.each do |child|
           next unless child.element?
           case child.name
-          when "Objective"       then objective = child.content.strip
+          when "Objective"       then objective = render_prose(child)
           when "Filter"          then filter = child.content.strip
           when "Members"         then members = collect_members.call(child)
           when "Audience"        then audience = parse_audience(child)

@@ -186,4 +186,56 @@ describe CWE::Weakness do
       CWE.all.flat_map(&.potential_mitigations).none?(&.description.nil?).should be_true
     end
   end
+
+  describe "XML-derived text" do
+    # Bug: the build copied the XML's pretty-printing whitespace into the
+    # text and ignored the xhtml layout, so code lost the line breaks and
+    # indentation MITRE encodes with `<xhtml:br/>` and nested
+    # `<xhtml:div style="margin-left:1em;">`, and gained the source tabs
+    # instead — this Python example was not valid Python.
+    it "lays out example code from its xhtml markup" do
+      code = CWE.find!(203).demonstrative_examples.flat_map(&.example_code)
+        .find!(&.code.starts_with?("def validate_password")).code
+      code.should eq(<<-PY)
+        def validate_password(actual_pw, typed_pw):
+            if len(actual_pw) <> len(typed_pw):
+                return 0
+
+            for i in len(actual_pw):
+                if actual_pw[i] <> typed_pw[i]:
+                    return 0
+
+            return 1
+        PY
+    end
+
+    it "keeps the spacing inside a line of code" do
+      CWE.find!(1243).demonstrative_examples.flat_map(&.example_code)
+        .flat_map(&.code.lines).should contain("assign key_big0    = debug_mode_i ? 192'b0 : {key0[0],")
+    end
+
+    it "collapses layout whitespace in prose, as MITRE's CSV export does" do
+      layout = /[\t\n]|  /
+      CWE.all.each do |w|
+        w.demonstrative_examples.each do |e|
+          e.intro_text.try(&.should_not match(layout))
+          e.body_text.each(&.should_not match(layout))
+        end
+        w.references.each { |r| r.section.try(&.should_not match(layout)) }
+      end
+      notes = CWE.categories.flat_map(&.notes) + CWE.views.flat_map(&.notes)
+      notes.each { |n| n.note.try(&.should_not match(layout)) }
+      (CWE.all + CWE.categories + CWE.views).each do |e|
+        e.mapping_notes.try do |m|
+          m.rationale.try(&.should_not match(layout))
+          m.comments.try(&.should_not match(layout))
+        end
+      end
+      CWE.categories.each { |c| c.summary.try(&.should_not match(layout)) }
+      CWE.views.each { |v| v.objective.try(&.should_not match(layout)) }
+      CWE.external_references.each { |r| r.title.try(&.should_not match(layout)) }
+      CWE.find!(862).references.find!(&.section.try(&.includes?("Determining")))
+        .section.should eq(%(Chapter 4, "Authorization" Page 114; Chapter 6, "Determining Appropriate Access Control" Page 171))
+    end
+  end
 end

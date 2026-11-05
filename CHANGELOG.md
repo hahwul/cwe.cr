@@ -4,6 +4,16 @@
 
 ### Fixed
 
+- Text the build reads from MITRE's XML kept the file's pretty-printing
+  whitespace and ignored the xhtml layout. `ExampleCode#code` lost the line
+  breaks and indentation MITRE encodes with `<xhtml:br/>` and nested
+  `margin-left` divs and picked up the source tabs instead (CWE-203's Python
+  example was no longer valid Python; 1,115 snippets changed). Intro/body
+  text, notes, summaries, mapping-note rationale and comments, reference
+  sections and citation titles carried stray newlines and tab runs (282
+  values). Code is now laid out from its markup (keeping the spacing inside
+  a line), and prose collapses whitespace the same way MITRE's CSV export
+  does.
 - `Consequence` kept only the last `Scope` and `Impact` of each consequence,
   though MITRE's schema allows several of each (527 of the 944 embedded
   entries lost data; CWE-79's first consequence reported `Confidentiality` /
