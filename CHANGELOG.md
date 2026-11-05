@@ -12,8 +12,8 @@
   text, notes, summaries, mapping-note rationale and comments, reference
   sections and citation titles carried stray newlines and tab runs (282
   values). Code is now laid out from its markup (keeping the spacing inside
-  a line), and prose collapses
-  whitespace the same way MITRE's CSV export does.
+  a line), and prose collapses whitespace the same way MITRE's CSV export
+  does.
 - `Consequence` kept only the last `Scope` and `Impact` of each consequence,
   though MITRE's schema allows several of each (527 of the 944 embedded
   entries lost data; CWE-79's first consequence reported `Confidentiality` /
