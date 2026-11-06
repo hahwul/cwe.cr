@@ -10,7 +10,7 @@ module CWE
   #
   # ```
   # w = CWE.find!("CWE-79")
-  # w.name                  # => "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+  # w.name                  # => "Improper Neutralization of Input During Web Page Generation"
   # w.abstraction           # => CWE::Abstraction::Base
   # w.parents.map(&.cwe_id) # => [74]
   # ```
@@ -153,7 +153,9 @@ module CWE
     end
 
     # `Overlaps` — added in CWE 5.0: the two entries cover partly the same
-    # ground without one being a child of the other.
+    # ground without one being a child of the other. As with `ParentOf`,
+    # MITRE records each edge on one entry only (788 -> 126 / 787,
+    # 1476 -> 1264), so the other side's list is empty.
     def overlaps_relations : Array(Related)
       related_with("Overlaps")
     end

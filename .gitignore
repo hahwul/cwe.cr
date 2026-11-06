@@ -6,8 +6,8 @@
 # Hwaro build output (built by CI; source lives in docs/)
 /docs/public/
 
-# Optional MITRE XML used by the data build script for version detection.
-# Not committed because of its size; users can drop it back at build time.
+# MITRE's XML catalog, the data build script's only input (see README).
+# Not committed because of its size; download it to rebuild the data.
 /data/cwec_v*.xml
 /data/cwec_v*.xml.zip
 /data/*.csv.zip

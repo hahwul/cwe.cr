@@ -73,7 +73,7 @@ describe CWE do
   describe ".find / .find!" do
     it "finds CWE-79 with its expected name" do
       w = CWE.find!("CWE-79")
-      # CWE 5.0 dropped the parenthesised common name from 53 entries.
+      # CWE 5.0 dropped the parenthesised common name from 45 entries.
       w.name.should eq("Improper Neutralization of Input During Web Page Generation")
       w.id.should eq(79)
       w.cwe_id.should eq("CWE-79")

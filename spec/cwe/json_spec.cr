@@ -53,6 +53,8 @@ describe "CWE JSON serialization" do
         observedExamples taxonomyMappings relatedAttackPatterns
         demonstrativeExamples references mappingNotes contentHistory
       ].each { |key| keys.should contain(key) }
+      # CWE 5.0 moved CWE-79's extended description to Technical_Nuance.
+      JSON.parse(CWE.find!(22).to_json).as_h.keys.should contain("extendedDescription")
     end
 
     it "emits the string-list blocks when they are populated" do

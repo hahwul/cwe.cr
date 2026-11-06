@@ -423,11 +423,10 @@ module CWE
     # `phases` arrays, or the single `phase` of a document written before
     # entries kept more than one.
     private def self.parse_intro(x : ::JSON::Any) : ModeOfIntroduction
-      phases = strings(x, "phases")
       ModeOfIntroduction.new(
-        phase: phases.first? || raw_s(x, "phase") || "",
+        phase: raw_s(x, "phase") || "",
         note: s(x, "note"),
-        phases: phases,
+        phases: strings(x, "phases"),
       )
     end
 
@@ -453,15 +452,15 @@ module CWE
         description: s(x, "description"),
         effectiveness: s(x, "effectiveness"),
         effectiveness_notes: s(x, "effectiveness_notes"),
+        phases: strings(x, "phases"),
       )
     end
 
     private def self.parse_mitigation(x : ::JSON::Any) : Mitigation
-      phases = strings(x, "phases")
       Mitigation.new(
         mitigation_id: s(x, "mitigation_id"),
-        phase: phases.first? || s(x, "phase"),
-        phases: phases,
+        phase: s(x, "phase"),
+        phases: strings(x, "phases"),
         strategy: s(x, "strategy"),
         description: s(x, "description"),
         effectiveness: s(x, "effectiveness"),

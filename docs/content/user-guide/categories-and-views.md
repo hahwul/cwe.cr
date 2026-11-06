@@ -37,7 +37,7 @@ Iterate all categories:
 
 ```crystal
 CWE.categories       # => Array(CWE::Category), sorted by id
-CWE.categories.size  # => 422
+CWE.categories.size  # => 431
 ```
 
 ## Views
@@ -51,7 +51,7 @@ v.objective # => "This view is intended to facilitate research..."
 v.member_ids.size # => number of top-level pillar entries
 ```
 
-`CWE.views` returns the sorted list (59 entries).
+`CWE.views` returns the sorted list (62 entries).
 
 ## Unified entry lookup
 

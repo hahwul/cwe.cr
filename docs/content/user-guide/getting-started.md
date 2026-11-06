@@ -82,8 +82,8 @@ end
 ```crystal
 CWE.catalog_version # => "5.0"
 CWE.size            # => 984  (weaknesses)
-CWE.categories.size # => 422
-CWE.views.size      # => 59
+CWE.categories.size # => 431
+CWE.views.size      # => 62
 ```
 
 ## Next Steps

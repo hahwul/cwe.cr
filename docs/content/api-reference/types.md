@@ -42,7 +42,7 @@ CWE::Status.parse_label("Stable") # => CWE::Status::Stable
 
 ```crystal
 struct CWE::Related
-  nature   : String   # "ChildOf", "ParentOf", "PeerOf", "CanPrecede", "CanFollow", "CanAlsoBe", "StartsWith", "Requires"
+  nature   : String   # "ChildOf", "ParentOf", "PeerOf", "CanPrecede", "CanFollow", "CanAlsoBe", "StartsWith", "Requires", "Overlaps"
   cwe_id   : Int32    # JSON: "cweId"
   view_id  : Int32    # JSON: "viewId"
   ordinal  : String?  # "Primary", "Resultant", …
@@ -88,6 +88,7 @@ struct CWE::DetectionMethod
   description         : String?
   effectiveness       : String?
   effectiveness_notes : String?
+  phases              : Array(String) # new in CWE 5.0
 end
 ```
 

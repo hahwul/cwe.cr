@@ -82,6 +82,11 @@ describe CWE::Weakness do
       CWE.pillar_of(71).should be_nil
     end
 
+    it "keeps the edges CWE 5.0 still declares on newly deprecated entries" do
+      CWE.children_of(672, view_id: 1003).map(&.id).should contain(613)
+      CWE.children_of(377).map(&.id).should eq([378, 379])
+    end
+
     it "detects both the status and the DEPRECATED: name prefix" do
       by_status = CWE::Weakness.new(id: 1, name: "Anything", status: CWE::Status::Deprecated)
       by_status.deprecated?.should be_true
@@ -288,6 +293,7 @@ describe CWE::Weakness do
       intro.phase.should eq("Implementation")
       CWE.find!(1427).modes_of_introduction.map(&.phases).should contain(["Implementation", "Training"])
       CWE.find!(1461).modes_of_introduction.first.phase.should eq("Implementation & Physical Design")
+      CWE.find!(1427).detection_methods.map(&.phases).should contain(["Prompting"])
     end
 
     it "reads a document that carries a single phase" do
@@ -301,7 +307,9 @@ describe CWE::Weakness do
       CWE::Mitigation.from_json(%({"phase":"Testing"})).phases.should eq(["Testing"])
       CWE::Mitigation.from_json(%({"phases":["Testing","Operation"]})).phase.should eq("Testing")
       CWE::Mitigation.new.phases.should be_empty
+      CWE::Mitigation.new(phase: "A", phases: ["B", "C"]).phase.should eq("B")
       CWE::ModeOfIntroduction.new("Operation").phases.should eq(["Operation"])
+      CWE::ModeOfIntroduction.from_json(%({"phases":["Implementation"]})).phase.should eq("Implementation")
     end
 
     it "round-trips phases through JSON" do

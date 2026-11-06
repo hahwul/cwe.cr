@@ -6,22 +6,27 @@
 
 - The embedded catalog is now built from MITRE's XML (`cwec_vX.Y.xml`)
   alone instead of the view-1000 CSV export plus the XML, and moves from
-  CWE 4.20 to **CWE 5.0** (2026-10-28). Notable upstream changes: 53
+  CWE 4.20 to **CWE 5.0** (2026-10-28). Notable upstream changes: 45
   weaknesses dropped the parenthesised common name (CWE-79 is now
   "Improper Neutralization of Input During Web Page Generation"), view 1000
   is now "Complete Weakness Hierarchy", Categories are `<Grouping>`s (the
   library still exposes them as `Category`), 15 new weaknesses, 9 new
   categories, 3 new views, a new `Overlaps` relationship, and much of the
   old `Extended_Description` text moved to `Technical_Nuance` (see Added) or
-  into consequence / introduction notes and background details.
+  into consequence / introduction notes and background details. The new
+  `<Dimensions>` block and `Diagram` attribute are not carried yet.
 - **Behaviour change:** deprecated weaknesses are now part of the catalog
   (28 in CWE 5.0; the CSV export left them out), so `CWE.find(71)` resolves
   and `size` / `all` / `each` / `search` / `with_status` include them.
-  MITRE gives them no relationships, so they stay out of hierarchy walks;
-  filter with `reject(&.deprecated?)` for the previous set. (CWE 5.0 does
-  still list CWE-378 and CWE-379 as `ChildOf` the now-deprecated CWE-377.)
-- **Behaviour change:** `Mitigation#phase` is the first `<Phase>` instead
-  of the CSV's space-joined list (`"Implementation Architecture and
+  Most have no relationships and stay out of hierarchy walks, but CWE 5.0
+  keeps a few edges to its three newly deprecated entries: CWE-378 / 379 are
+  `ChildOf` CWE-377, CWE-613 is `ChildOf` CWE-672 (view 1003) and
+  `Requires`-ed by CWE-352, and some categories still list 377 / 391 / 613,
+  so `children_of(672)`, `members_of(724)` etc. can return them, exactly as
+  MITRE's XML does. Filter with `reject(&.deprecated?)` for the previous
+  set.
+- **Behaviour change:** `Mitigation#phase` is the first `<Phase>` /
+  `<Custom_Phase>` instead of the CSV's space-joined list (`"Implementation Architecture and
   Design"`, not a valid phase, on 244 mitigations in 4.20 / 263 in 5.0); the
   full list is the new `phases`.
 - Embedded JSON grows from 6.50 MB to 6.84 MB.
@@ -107,10 +112,11 @@
 
 ### Added
 
-- `Mitigation#phases` and `ModeOfIntroduction#phases` — every `<Phase>`
-  and `<Custom_Phase>` (CWE 5.0's AI / hardware lifecycle phases), in
-  order; `phase` is the first. JSON documents carrying only `phase` still
-  load.
+- `Mitigation#phases`, `ModeOfIntroduction#phases` and
+  `DetectionMethod#phases` — every `<Phase>` and `<Custom_Phase>` (CWE 5.0's
+  AI / hardware lifecycle phases such as `Training`, whose `Domain` is not
+  kept), in order; `phase` is the first. JSON documents carrying only
+  `phase` still load.
 - `Weakness#technical_nuance` (`<Technical_Nuance>`, new in CWE 5.0),
   emitted as `technicalNuance` and covered by `search`.
 - `Weakness#overlaps_relations` for CWE 5.0's `Overlaps` edges.

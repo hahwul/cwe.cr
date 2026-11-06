@@ -160,7 +160,7 @@ following CWE-15's 7PK (view 700) edge up to `CWE-707`.
 ### Search
 
 ```crystal
-CWE.search_by_name("cross-site scripting") # name-only match
+CWE.search_by_name("web page generation")  # name-only match
 CWE.search("HttpOnly")                     # name + description + alternate terms
 CWE.with_abstraction(CWE::Abstraction::Pillar)
 CWE.with_status(CWE::Status::Stable)
