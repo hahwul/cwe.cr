@@ -12,7 +12,7 @@ Common views:
 
 | View ID  | Name                                                  |
 |----------|-------------------------------------------------------|
-| CWE-1000 | Research Concepts (the comprehensive Graph)           |
+| CWE-1000 | Complete Weakness Hierarchy (the comprehensive Graph) |
 | CWE-699  | Software Development                                  |
 | CWE-1003 | Weaknesses for Simplified Mapping of Published Vulnerabilities |
 | CWE-635  | Weaknesses Originally Used by NVD                     |

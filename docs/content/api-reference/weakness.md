@@ -19,6 +19,7 @@ once when the embedded catalog is loaded and are then immutable.
 | `status`                     | `CWE::Status`                   |
 | `description`                | `String?`                       |
 | `extended_description`       | `String?`                       |
+| `technical_nuance`           | `String?` — new in CWE 5.0      |
 | `likelihood_of_exploit`      | `String?`                       |
 | `related_weaknesses`         | `Array(Related)`                |
 | `ordinalities`               | `Array(Ordinality)`             |
@@ -36,8 +37,8 @@ once when the embedded catalog is loaded and are then immutable.
 | `functional_areas`           | `Array(String)`                 |
 | `affected_resources`         | `Array(String)`                 |
 | `exploitation_factors`       | `Array(String)`                 |
-| `raw_abstraction`            | `String?` — original CSV value  |
-| `raw_status`                 | `String?` — original CSV value  |
+| `raw_abstraction`            | `String?` — original XML value  |
+| `raw_status`                 | `String?` — original XML value  |
 
 See [Types](/api-reference/types/) for the nested struct definitions.
 
@@ -58,6 +59,7 @@ w.can_follow_relations        # CanFollow
 w.owasp_mappings  # TaxonomyMapping entries with taxonomy_name starting with "OWASP"
 w.capec_ids       # alias for related_attack_patterns
 w.deprecated?     # true if status is Deprecated or name starts with "DEPRECATED:"
+                  # (deprecated weaknesses are in the catalog: CWE.find!(71).deprecated? # => true)
 w.summary         # "CWE-79: Improper Neutralization of Input ... (Base, Stable)"
 ```
 

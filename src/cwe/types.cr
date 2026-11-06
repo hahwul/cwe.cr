@@ -202,7 +202,7 @@ module CWE
   #
   # `nature` is the relationship label as defined by the catalog
   # (`"ChildOf"`, `"ParentOf"`, `"PeerOf"`, `"CanPrecede"`, `"CanFollow"`,
-  # `"CanAlsoBe"`, `"StartsWith"`, `"Requires"`). The string is preserved
+  # `"CanAlsoBe"`, `"StartsWith"`, `"Requires"`, `"Overlaps"`). The string is preserved
   # verbatim so callers can match it against future natures without a library
   # upgrade.
   struct Related
@@ -270,8 +270,27 @@ module CWE
     @[JSON::Field(key: "effectivenessNotes")]
     getter effectiveness_notes : String?
 
+    # Every `<Phase>` / `<Custom_Phase>` of the mitigation, in order — 263
+    # mitigations in CWE 5.0 list more than one. `phase` is the first of
+    # them. (While the catalog was built from MITRE's CSV export, which joins
+    # the phases with a space, `phase` read e.g.
+    # `"Implementation Architecture and Design"`.)
+    getter phases : Array(String) = [] of String
+
     def initialize(@mitigation_id = nil, @phase = nil, @strategy = nil,
-                   @description = nil, @effectiveness = nil, @effectiveness_notes = nil)
+                   @description = nil, @effectiveness = nil, @effectiveness_notes = nil,
+                   @phases = [] of String)
+      after_initialize
+    end
+
+    # Keeps `phase` the first of `phases` whichever one a caller or a JSON
+    # document supplied (`phases` wins when both are given);
+    # JSON::Serializable calls this after reading.
+    def after_initialize
+      if @phases.empty? && (p = @phase)
+        @phases = [p]
+      end
+      @phase = @phases.first?
     end
   end
 
@@ -289,8 +308,13 @@ module CWE
     @[JSON::Field(key: "effectivenessNotes")]
     getter effectiveness_notes : String?
 
+    # `<Phase>` / `<Custom_Phase>`s, which schema 8.0 (CWE 5.0) added to
+    # detection methods.
+    getter phases : Array(String) = [] of String
+
     def initialize(@method, @method_id = nil, @description = nil,
-                   @effectiveness = nil, @effectiveness_notes = nil)
+                   @effectiveness = nil, @effectiveness_notes = nil,
+                   @phases = [] of String)
     end
   end
 
@@ -318,10 +342,20 @@ module CWE
   struct ModeOfIntroduction
     include JSON::Serializable
 
-    getter phase : String
+    # The first listed phase; `phases` holds all of them. MITRE's schema 8.0
+    # (CWE 5.0) allows several `<Phase>` / `<Custom_Phase>`s per introduction.
+    getter phase : String = ""
     getter note : String?
+    getter phases : Array(String) = [] of String
 
-    def initialize(@phase, @note = nil)
+    def initialize(@phase = "", @note = nil, @phases = [] of String)
+      after_initialize
+    end
+
+    # See `Mitigation#after_initialize`.
+    def after_initialize
+      @phases = [@phase] if @phases.empty? && !@phase.empty?
+      @phase = @phases.first? || ""
     end
   end
 

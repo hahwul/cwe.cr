@@ -70,7 +70,7 @@ All accept an optional `view_id:` filter.
 | Method                  | Returns       |
 |-------------------------|---------------|
 | `CWE.catalog`           | `Catalog`     |
-| `CWE.catalog_version`   | `String` (e.g. `"4.20"`) |
+| `CWE.catalog_version`   | `String` (e.g. `"5.0"`) |
 
 ## See also
 

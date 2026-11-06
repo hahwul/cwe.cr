@@ -14,8 +14,7 @@ module CWE
   #
   # Constructing your own `Catalog` (e.g. from a different JSON file or a
   # filtered subset) is supported but rarely necessary — the embedded blob
-  # is sourced from the MITRE CWE Research view (`view 1000`), which is the
-  # comprehensive set.
+  # is built from MITRE's full XML catalog, deprecated entries included.
   class Catalog
     # Embedded source data. Loaded at compile time so the resulting binary
     # is self-contained — no I/O is required to look up any CWE entry.
@@ -37,8 +36,8 @@ module CWE
       @@default.not_nil!
     end
 
-    # The MITRE catalog version string, e.g. `"4.20"`, or `"unknown"` if the
-    # build script was not given a sibling XML to read it from.
+    # The MITRE catalog version string, e.g. `"5.0"`, or `"unknown"` if the
+    # source document did not carry one.
     getter catalog_version : String
     # ISO-8601 UTC timestamp at which the embedded blob was generated.
     getter generated_at : String
@@ -344,6 +343,7 @@ module CWE
         structure: Structure.parse_label(structure_raw),
         description: raw_s(j, "description"),
         extended_description: raw_s(j, "extended_description"),
+        technical_nuance: raw_s(j, "technical_nuance"),
         likelihood_of_exploit: raw_s(j, "likelihood_of_exploit"),
         related_weaknesses: objects(j, "related_weaknesses").map { |x| parse_related(x) },
         ordinalities: objects(j, "ordinalities").map { |x| parse_ordinality(x) },
@@ -420,10 +420,13 @@ module CWE
       )
     end
 
+    # `phases` arrays, or the single `phase` of a document written before
+    # entries kept more than one.
     private def self.parse_intro(x : ::JSON::Any) : ModeOfIntroduction
       ModeOfIntroduction.new(
         phase: raw_s(x, "phase") || "",
         note: s(x, "note"),
+        phases: strings(x, "phases"),
       )
     end
 
@@ -449,6 +452,7 @@ module CWE
         description: s(x, "description"),
         effectiveness: s(x, "effectiveness"),
         effectiveness_notes: s(x, "effectiveness_notes"),
+        phases: strings(x, "phases"),
       )
     end
 
@@ -456,6 +460,7 @@ module CWE
       Mitigation.new(
         mitigation_id: s(x, "mitigation_id"),
         phase: s(x, "phase"),
+        phases: strings(x, "phases"),
         strategy: s(x, "strategy"),
         description: s(x, "description"),
         effectiveness: s(x, "effectiveness"),
@@ -578,7 +583,7 @@ module CWE
 
     # ---------- Categories ----------
 
-    # Number of categories in the catalog (0 if the build was CSV-only).
+    # Number of categories in the catalog (MITRE's `<Grouping>`s since CWE 5.0).
     def category_count : Int32
       @sorted_categories.size
     end
@@ -892,7 +897,8 @@ module CWE
     # ---------- Search ----------
 
     # Case-insensitive substring search over name + description + extended
-    # description + alternate terms. Returns matches in id order.
+    # description + technical nuance + alternate terms. Returns matches in id
+    # order.
     def search(query : String) : Array(Weakness)
       q = query.downcase.strip
       return [] of Weakness if q.empty?
@@ -913,6 +919,9 @@ module CWE
         return true if d.downcase.includes?(q)
       end
       if d = w.extended_description
+        return true if d.downcase.includes?(q)
+      end
+      if d = w.technical_nuance
         return true if d.downcase.includes?(q)
       end
       w.alternate_terms.any? do |t|

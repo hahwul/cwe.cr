@@ -42,7 +42,7 @@ CWE::Status.parse_label("Stable") # => CWE::Status::Stable
 
 ```crystal
 struct CWE::Related
-  nature   : String   # "ChildOf", "ParentOf", "PeerOf", "CanPrecede", "CanFollow", "CanAlsoBe", "StartsWith", "Requires"
+  nature   : String   # "ChildOf", "ParentOf", "PeerOf", "CanPrecede", "CanFollow", "CanAlsoBe", "StartsWith", "Requires", "Overlaps"
   cwe_id   : Int32    # JSON: "cweId"
   view_id  : Int32    # JSON: "viewId"
   ordinal  : String?  # "Primary", "Resultant", …
@@ -69,8 +69,9 @@ end
 
 ```crystal
 struct CWE::Mitigation
-  mitigation_id       : String?   # JSON: "mitigationId"
-  phase               : String?   # "Architecture and Design", "Implementation", "Operation", …
+  mitigation_id       : String?   # JSON: "mitigationId", e.g. "MIT-4"
+  phase               : String?   # first of `phases`
+  phases              : Array(String) # every <Phase>/<Custom_Phase>: "Architecture and Design", "Implementation", …
   strategy            : String?
   description         : String?
   effectiveness       : String?
@@ -87,6 +88,7 @@ struct CWE::DetectionMethod
   description         : String?
   effectiveness       : String?
   effectiveness_notes : String?
+  phases              : Array(String) # new in CWE 5.0
 end
 ```
 
@@ -113,8 +115,9 @@ end
 
 ```crystal
 struct CWE::ModeOfIntroduction
-  phase : String # "Implementation", "Architecture and Design", "Operation", …
-  note  : String?
+  phase  : String        # first of `phases`
+  note   : String?
+  phases : Array(String) # "Implementation", "Architecture and Design", "Operation", …
 end
 ```
 

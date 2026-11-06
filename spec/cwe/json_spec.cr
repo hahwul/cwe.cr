@@ -47,12 +47,14 @@ describe "CWE JSON serialization" do
     it "emits every populated block of a fully-detailed entry" do
       keys = JSON.parse(CWE.find!(79).to_json).as_h.keys
       %w[
-        description extendedDescription relatedWeaknesses ordinalities
+        description technicalNuance likelihoodOfExploit relatedWeaknesses ordinalities
         applicablePlatforms alternateTerms modesOfIntroduction
         commonConsequences detectionMethods potentialMitigations
         observedExamples taxonomyMappings relatedAttackPatterns
         demonstrativeExamples references mappingNotes contentHistory
       ].each { |key| keys.should contain(key) }
+      # CWE 5.0 moved CWE-79's extended description to Technical_Nuance.
+      JSON.parse(CWE.find!(22).to_json).as_h.keys.should contain("extendedDescription")
     end
 
     it "emits the string-list blocks when they are populated" do

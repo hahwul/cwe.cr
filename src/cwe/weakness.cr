@@ -10,7 +10,7 @@ module CWE
   #
   # ```
   # w = CWE.find!("CWE-79")
-  # w.name                  # => "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+  # w.name                  # => "Improper Neutralization of Input During Web Page Generation"
   # w.abstraction           # => CWE::Abstraction::Base
   # w.parents.map(&.cwe_id) # => [74]
   # ```
@@ -25,6 +25,9 @@ module CWE
     getter description : String?
     getter extended_description : String?
     getter likelihood_of_exploit : String?
+    # `<Technical_Nuance>`, added in CWE 5.0. Much of what earlier releases
+    # kept in `extended_description` now lives here.
+    getter technical_nuance : String?
 
     getter related_weaknesses : Array(Related)
     getter ordinalities : Array(Ordinality)
@@ -86,6 +89,7 @@ module CWE
       @raw_abstraction : String? = nil,
       @raw_status : String? = nil,
       @raw_structure : String? = nil,
+      @technical_nuance : String? = nil,
     )
     end
 
@@ -110,7 +114,7 @@ module CWE
     end
 
     # Edges of the form `ParentOf` — children that point back at this entry.
-    # MITRE expresses the relationship from the child's side, so as of CWE 4.20
+    # MITRE expresses the relationship from the child's side, so as of CWE 5.0
     # this is empty for every entry; use `Catalog#children_of` for the answer.
     def child_relations : Array(Related)
       related_with("ParentOf")
@@ -122,7 +126,7 @@ module CWE
 
     # Chain edges: this weakness can precede / follow another in a chain.
     # As with `ParentOf`, MITRE records chains from one side only, so
-    # `can_follow_relations` is empty across CWE 4.20 — the inverse of a
+    # `can_follow_relations` is empty across CWE 5.0 — the inverse of a
     # `CanPrecede` edge has to be found on the other entry.
     def can_precede_relations : Array(Related)
       related_with("CanPrecede")
@@ -146,6 +150,14 @@ module CWE
 
     def starts_with_relations : Array(Related)
       related_with("StartsWith")
+    end
+
+    # `Overlaps` — added in CWE 5.0: the two entries cover partly the same
+    # ground without one being a child of the other. As with `ParentOf`,
+    # MITRE records each edge on one entry only (788 -> 126 / 787,
+    # 1476 -> 1264), so the other side's list is empty.
+    def overlaps_relations : Array(Related)
+      related_with("Overlaps")
     end
 
     # OWASP entries in `taxonomy_mappings`.

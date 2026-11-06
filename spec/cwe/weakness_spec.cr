@@ -30,14 +30,18 @@ describe CWE::Weakness do
 
     it "returns an empty list for a nature the entry does not use" do
       CWE.find!(79).related_with("NotARealNature").should be_empty
-      # MITRE 4.20 stores no ParentOf/CanFollow edge anywhere.
+      # MITRE stores no ParentOf/CanFollow edge anywhere (as of CWE 5.0).
       CWE.all.flat_map(&.child_relations).should be_empty
       CWE.all.flat_map(&.can_follow_relations).should be_empty
     end
 
     it "covers every nature the embedded catalog actually uses" do
       natures = CWE.all.flat_map(&.related_weaknesses).map(&.nature).to_set
-      natures.should eq(Set{"ChildOf", "PeerOf", "CanPrecede", "CanAlsoBe", "Requires", "StartsWith"})
+      natures.should eq(Set{"ChildOf", "PeerOf", "CanPrecede", "CanAlsoBe", "Requires", "StartsWith", "Overlaps"})
+    end
+
+    it "selects the Overlaps edges CWE 5.0 introduced" do
+      CWE.find!(788).overlaps_relations.map(&.cwe_id).should eq([126, 787])
     end
   end
 
@@ -61,10 +65,26 @@ describe CWE::Weakness do
   end
 
   describe "#deprecated?" do
-    it "is false for every entry in the Research view" do
-      # The embedded set is view 1000, which MITRE builds without deprecated
-      # weaknesses — so the predicate has to be exercised on a document.
-      CWE.all.count(&.deprecated?).should eq(0)
+    # Gap: the catalog came from MITRE's view-1000 CSV export, which leaves
+    # deprecated weaknesses out, so looking one up by id missed.
+    it "finds deprecated weaknesses, which the catalog now includes" do
+      w = CWE.find!(71)
+      w.status.should eq(CWE::Status::Deprecated)
+      w.deprecated?.should be_true
+      w.name.should eq("DEPRECATED: Apple '.DS_Store'")
+      CWE.with_status(CWE::Status::Deprecated).size.should eq(28)
+      CWE.all.count(&.deprecated?).should eq(28)
+    end
+
+    it "leaves deprecated entries out of the hierarchy MITRE does not put them in" do
+      CWE.find!(71).related_weaknesses.should be_empty
+      CWE.all.flat_map(&.related_weaknesses).map(&.cwe_id).should_not contain(71)
+      CWE.pillar_of(71).should be_nil
+    end
+
+    it "keeps the edges CWE 5.0 still declares on newly deprecated entries" do
+      CWE.children_of(672, view_id: 1003).map(&.id).should contain(613)
+      CWE.children_of(377).map(&.id).should eq([378, 379])
     end
 
     it "detects both the status and the DEPRECATED: name prefix" do
@@ -106,7 +126,7 @@ describe CWE::Weakness do
     it "selects the OWASP rows out of taxonomy_mappings" do
       owasp = CWE.find!(79).owasp_mappings
       owasp.should_not be_empty
-      owasp.map(&.taxonomy_name).to_set.should eq(Set{"OWASP Top Ten 2004", "OWASP Top Ten 2007"})
+      owasp.map(&.taxonomy_name).to_set.should eq(Set{"OWASP Top Ten 2004", "OWASP Top Ten 2007", "OWASP Golang Secure Coding Practices Guide"})
       owasp.all?(&.taxonomy_name.starts_with?("OWASP")).should be_true
     end
 
@@ -120,8 +140,7 @@ describe CWE::Weakness do
   describe "string forms" do
     it "renders a one-line summary" do
       CWE.find!(79).summary.should eq(
-        "CWE-79: Improper Neutralization of Input During Web Page Generation " \
-        "('Cross-site Scripting') (Base, Stable)"
+        "CWE-79: Improper Neutralization of Input During Web Page Generation (Base, Stable)"
       )
     end
 
@@ -170,7 +189,7 @@ describe CWE::Weakness do
       CWE.find!(69).taxonomy_mappings.map(&.entry_name)
         .should eq(["Windows ::DATA alternate data stream"])
       ex = CWE.find!(428).observed_examples.find!(&.reference.==("CVE-2005-2938"))
-      ex.description.should eq("CreateProcess() and CreateProcessAsUser() can be misused by applications to allow program.exe style attacks in C:")
+      ex.description.should eq(%(CreateProcess() and CreateProcessAsUser() can be misused by applications to allow "program.exe" style attacks in C:))
       ex.link.should eq("https://www.cve.org/CVERecord?id=CVE-2005-2938")
       CWE.all.flat_map(&.observed_examples).none?(&.reference.empty?).should be_true
 
@@ -236,6 +255,89 @@ describe CWE::Weakness do
       CWE.external_references.each { |r| r.title.try(&.should_not match(layout)) }
       CWE.find!(862).references.find!(&.section.try(&.includes?("Determining")))
         .section.should eq(%(Chapter 4, "Authorization" Page 114; Chapter 6, "Determining Appropriate Access Control" Page 171))
+    end
+  end
+
+  # The catalog used to come from MITRE's CSV export, which loses or mangles
+  # data the XML carries. Each example below read differently (or not at
+  # all) when the embedded data was built from the CSV.
+  describe "XML-sourced fields the CSV export lost" do
+    it "reads Likelihood_Of_Exploit, which the CSV left blank on every entry" do
+      CWE.find!(79).likelihood_of_exploit.should eq("High")
+      CWE.all.count(&.likelihood_of_exploit).should be > 150
+      CWE.all.compact_map(&.likelihood_of_exploit).to_set.should eq(Set{"High", "Medium", "Low"})
+    end
+
+    it "keeps Mitigation_ID and Detection_Method_ID" do
+      CWE.find!(79).potential_mitigations.map(&.mitigation_id).first(4)
+        .should eq(["MIT-4", nil, "MIT-6", "MIT-15"])
+      CWE.find!(78).detection_methods.map(&.method_id).first(3).should eq(["DM-1", "DM-2", "DM-10"])
+      CWE.all.flat_map(&.detection_methods).count(&.method_id).should be > 500
+    end
+
+    it "keeps effectiveness notes" do
+      CWE.find!(78).detection_methods.first.effectiveness_notes
+        .should eq("This is not a perfect solution, since 100% accuracy and coverage are not feasible.")
+    end
+
+    it "lists every phase of a mitigation instead of joining them with a space" do
+      m = CWE.find!(79).potential_mitigations[1]
+      m.phases.should eq(["Implementation", "Architecture and Design"])
+      m.phase.should eq("Implementation") # was "Implementation Architecture and Design"
+      CWE.all.flat_map(&.potential_mitigations).none?(&.phase.try(&.includes?(" Architecture and Design"))).should be_true
+    end
+
+    it "lists every phase of a mode of introduction, Custom_Phase included" do
+      intro = CWE.find!(7).modes_of_introduction.first
+      intro.phases.should eq(["Implementation", "System Configuration", "Operation"])
+      intro.phase.should eq("Implementation")
+      CWE.find!(1427).modes_of_introduction.map(&.phases).should contain(["Implementation", "Training"])
+      CWE.find!(1461).modes_of_introduction.first.phase.should eq("Implementation & Physical Design")
+      CWE.find!(1427).detection_methods.map(&.phases).should contain(["Prompting"])
+    end
+
+    it "reads a document that carries a single phase" do
+      doc = {"weaknesses" => [{"id" => 1,
+                               "potential_mitigations" => [{"phase" => "Implementation"}],
+                               "modes_of_introduction" => [{"phase" => "Operation"}]}]}.to_json
+      w = CWE::Catalog.from_json(doc).find!(1)
+      w.potential_mitigations.first.phases.should eq(["Implementation"])
+      w.modes_of_introduction.first.phases.should eq(["Operation"])
+
+      CWE::Mitigation.from_json(%({"phase":"Testing"})).phases.should eq(["Testing"])
+      CWE::Mitigation.from_json(%({"phases":["Testing","Operation"]})).phase.should eq("Testing")
+      CWE::Mitigation.new.phases.should be_empty
+      CWE::Mitigation.new(phase: "A", phases: ["B", "C"]).phase.should eq("B")
+      CWE::ModeOfIntroduction.new("Operation").phases.should eq(["Operation"])
+      CWE::ModeOfIntroduction.from_json(%({"phases":["Implementation"]})).phase.should eq("Implementation")
+    end
+
+    it "round-trips phases through JSON" do
+      m = CWE.find!(79).potential_mitigations[1]
+      back = CWE::Mitigation.from_json(m.to_json)
+      back.phases.should eq(m.phases)
+      back.phase.should eq(m.phase)
+    end
+
+    it "keeps the quotes and backslashes in names and text" do
+      CWE.find!(28).name.should eq(%(Path Traversal: '..\\filedir'))
+      CWE.find!(29).name.should eq(%(Path Traversal: '\\..\\filename'))
+      CWE.find!(30).name.should eq(%(Path Traversal: '\\dir\\..\\filename'))
+      CWE.find!(31).name.should eq(%(Path Traversal: 'dir\\..\\..\\filename'))
+      CWE.find!(8).potential_mitigations.first.description.to_s.should contain(%(Declare Java beans "local"))
+    end
+
+    it "keeps a platform's Name and Class apart" do
+      tech = CWE.find!(1259).applicable_platforms.select(&.kind.==("Technology"))
+      tech.map { |p| {p.name, p.class_label} }
+        .should eq([{"Processor Hardware", "Not Technology-Specific"}, {nil, "System on Chip"}])
+    end
+
+    it "exposes Technical_Nuance, where CWE 5.0 moved extended descriptions" do
+      w = CWE.find!(79)
+      w.technical_nuance.to_s.should start_with("There are many variants of cross-site scripting")
+      CWE.search("different attack topologies").map(&.id).should contain(79)
+      JSON.parse(w.to_json)["technicalNuance"].as_s.should eq(w.technical_nuance)
     end
   end
 end

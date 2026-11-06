@@ -11,6 +11,7 @@ weight = 4
 - `name`
 - `description`
 - `extended_description`
+- `technical_nuance`
 - `alternate_terms[*].term` and `.description`
 
 ```crystal
@@ -18,7 +19,7 @@ CWE.search("HttpOnly").map(&.cwe_id)
 # => ["CWE-1004"]
 
 CWE.search("cross-site").map(&.cwe_id)
-# => ["CWE-79", "CWE-352", ...]
+# => ["CWE-79", "CWE-352", ...]  (CWE-79 via its alternate terms / text)
 
 CWE.search("XSS").map(&.cwe_id)
 # Matches "XSS" appearing in any of the searched fields, including alternate
@@ -32,8 +33,8 @@ Empty / whitespace queries return an empty list.
 If you want strong hits only, restrict to the `name` field:
 
 ```crystal
-CWE.search_by_name("cross-site scripting")
-# => [CWE-79, CWE-692]
+CWE.search_by_name("web page generation")
+# => [CWE-79]  (CWE 5.0 dropped "('Cross-site Scripting')" from the name)
 ```
 
 ## Filters by abstraction

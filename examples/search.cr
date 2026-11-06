@@ -4,8 +4,8 @@ require "../src/cwe"
 # Search and filtering
 # =============================================================================
 
-puts "--- search_by_name(\"cross-site\") ---"
-CWE.search_by_name("cross-site").each do |w|
+puts "--- search_by_name(\"web page\") ---"
+CWE.search_by_name("web page").each do |w|
   puts "  #{w.summary}"
 end
 

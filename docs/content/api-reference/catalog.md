@@ -29,7 +29,7 @@ CWE::Catalog.from_json(json_string_or_io)
 
 | Method                  | Returns       |
 |-------------------------|---------------|
-| `catalog_version`       | `String` — `"4.20"`                    |
+| `catalog_version`       | `String` — `"5.0"`                    |
 | `generated_at`          | `String` — ISO-8601 UTC build timestamp |
 | `size`                  | `Int32` — weakness count                |
 | `category_count`        | `Int32`                                 |

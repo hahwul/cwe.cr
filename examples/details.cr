@@ -3,7 +3,7 @@ require "../src/cwe"
 # =============================================================================
 # Rich entry details
 # =============================================================================
-# Each Weakness exposes the structured fields parsed from MITRE's CSV:
+# Each Weakness exposes the structured fields parsed from MITRE's XML:
 # consequences, mitigations, detection methods, observed examples, taxonomy
 # mappings, applicable platforms, and alternate terms.
 

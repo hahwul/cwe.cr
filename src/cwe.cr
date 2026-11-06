@@ -5,7 +5,7 @@
 #
 # ```
 # w = CWE.find!("CWE-79")
-# w.name                           # => "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+# w.name                           # => "Improper Neutralization of Input During Web Page Generation"
 # w.abstraction                    # => CWE::Abstraction::Base
 # w.parent_relations.map(&.cwe_id) # => [74, 74]
 # w.summary                        # => "CWE-79: Improper Neutralization of Input ... (Base, Stable)"
@@ -234,7 +234,7 @@ module CWE
     catalog.members_of(id)
   end
 
-  # The MITRE catalog version embedded in this build (e.g. `"4.20"`).
+  # The MITRE catalog version embedded in this build (e.g. `"5.0"`).
   def self.catalog_version : String
     catalog.catalog_version
   end
@@ -242,7 +242,7 @@ module CWE
   # ---- External references ----
 
   # All catalog-level citations (the `<External_References>` block in the
-  # MITRE XML). Empty when the build wasn't given the XML.
+  # MITRE XML).
   def self.external_references : Array(ExternalReference)
     catalog.external_references
   end

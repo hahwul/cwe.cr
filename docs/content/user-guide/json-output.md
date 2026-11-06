@@ -20,12 +20,13 @@ puts CWE.find!(79).to_json
 {
   "id": 79,
   "cweId": "CWE-79",
-  "name": "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
+  "name": "Improper Neutralization of Input During Web Page Generation",
   "url": "https://cwe.mitre.org/data/definitions/79.html",
   "abstraction": "Base",
   "status": "Stable",
   "description": "The product does not neutralize ...",
-  "extendedDescription": "There are many variants of cross-site scripting ...",
+  "technicalNuance": "There are many variants of cross-site scripting ...",
+  "likelihoodOfExploit": "High",
   "relatedWeaknesses": [
     {"nature": "ChildOf", "cweId": 74, "viewId": 1000, "ordinal": "Primary"}
   ],
@@ -33,14 +34,16 @@ puts CWE.find!(79).to_json
     {"kind": "Technology", "class": "Web Based", "prevalence": "Often"}
   ],
   "alternateTerms": [{"term": "XSS", "description": "..."}],
-  "modesOfIntroduction": [{"phase": "Implementation"}],
+  "modesOfIntroduction": [{"phase": "Implementation", "phases": ["Implementation"]}],
   "commonConsequences": [
     {"scope": "Access Control", "impact": "Bypass Protection Mechanism", "note": "...",
      "scopes": ["Access Control", "Confidentiality"],
      "impacts": ["Bypass Protection Mechanism", "Read Application Data"]}
   ],
   "potentialMitigations": [
-    {"phase": "Implementation", "strategy": "Output Encoding", "description": "..."}
+    {"mitigationId": "MIT-4", "phase": "Architecture and Design", "phases": ["Architecture and Design"],
+     "strategy": "Libraries or Frameworks", "description": "..."},
+    {"phase": "Implementation", "phases": ["Implementation", "Architecture and Design"], "description": "..."}
   ],
   "observedExamples": [
     {"reference": "CVE-2024-49038", "description": "XSS in AI assistant", "link": "..."}

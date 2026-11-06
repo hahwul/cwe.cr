@@ -89,7 +89,7 @@ describe CWE::View do
     v.cwe_id.should eq("CWE-1000")
     v.url.should eq("https://cwe.mitre.org/data/definitions/1000.html")
     v.to_s.should eq("CWE-1000")
-    v.inspect.should eq(%(#<CWE::View CWE-1000 "Research Concepts">))
+    v.inspect.should eq(%(#<CWE::View CWE-1000 "Complete Weakness Hierarchy">))
   end
 
   it "orders by numeric id and is always Mapping_Prohibited" do

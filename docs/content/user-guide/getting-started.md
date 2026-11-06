@@ -38,7 +38,7 @@ Create `hello.cr`:
 require "cwe"
 
 w = CWE.find!("CWE-79")
-puts w.name        # => Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')
+puts w.name        # => Improper Neutralization of Input During Web Page Generation
 puts w.abstraction # => Base
 puts w.url         # => https://cwe.mitre.org/data/definitions/79.html
 ```
@@ -80,10 +80,10 @@ end
 ## Catalog metadata
 
 ```crystal
-CWE.catalog_version # => "4.20"
-CWE.size            # => 944  (weaknesses)
-CWE.categories.size # => 422
-CWE.views.size      # => 59
+CWE.catalog_version # => "5.0"
+CWE.size            # => 984  (weaknesses)
+CWE.categories.size # => 431
+CWE.views.size      # => 62
 ```
 
 ## Next Steps
