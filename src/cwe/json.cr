@@ -30,6 +30,9 @@ module CWE
         if d = @extended_description
           json.field "extendedDescription", d
         end
+        if t = @technical_nuance
+          json.field "technicalNuance", t
+        end
         if l = @likelihood_of_exploit
           json.field "likelihoodOfExploit", l
         end

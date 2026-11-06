@@ -11,6 +11,7 @@ weight = 4
 - `name`
 - `description`
 - `extended_description`
+- `technical_nuance`
 - `alternate_terms[*].term` and `.description`
 
 ```crystal

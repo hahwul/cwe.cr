@@ -48,7 +48,7 @@ the most distant ancestor is returned instead.
 CWE catalogs the same edge multiple times — once per view it appears in.
 The two most common are:
 
-- **View 1000** — *Research Concepts*, the comprehensive graph view
+- **View 1000** — *Complete Weakness Hierarchy* (*Research Concepts* before CWE 5.0), the comprehensive graph view
 - **View 1003** — *Weaknesses for Simplified Mapping of Published Vulnerabilities*
 
 To restrict a walk to a single view, pass `view_id:`:

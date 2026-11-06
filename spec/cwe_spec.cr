@@ -73,9 +73,8 @@ describe CWE do
   describe ".find / .find!" do
     it "finds CWE-79 with its expected name" do
       w = CWE.find!("CWE-79")
-      w.name.should eq(
-        "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
-      )
+      # CWE 5.0 dropped the parenthesised common name from 53 entries.
+      w.name.should eq("Improper Neutralization of Input During Web Page Generation")
       w.id.should eq(79)
       w.cwe_id.should eq("CWE-79")
       w.abstraction.should eq(CWE::Abstraction::Base)
@@ -177,7 +176,7 @@ describe CWE do
 
   describe "Search" do
     it "finds by name substring" do
-      results = CWE.search_by_name("cross-site scripting")
+      results = CWE.search_by_name("web page generation")
       results.map(&.id).should contain(79)
     end
 
@@ -236,7 +235,7 @@ describe CWE do
       json = JSON.parse(CWE.find!(79).to_json)
       json["id"].as_i.should eq(79)
       json["cweId"].as_s.should eq("CWE-79")
-      json["name"].as_s.should contain("Cross-site Scripting")
+      json["name"].as_s.should contain("Web Page Generation")
       json["url"].as_s.should eq("https://cwe.mitre.org/data/definitions/79.html")
       json["abstraction"].as_s.should eq("Base")
       json["status"].as_s.should eq("Stable")
@@ -635,9 +634,9 @@ describe CWE do
       CWE.views.size.should be > 30
     end
 
-    it "looks up CWE-1000 (Research Concepts) as a View" do
+    it "looks up CWE-1000 (the Research view) as a View" do
       v = CWE.view!(1000)
-      v.name.should eq("Research Concepts")
+      v.name.should eq("Complete Weakness Hierarchy") # "Research Concepts" before CWE 5.0
       v.type.should eq("Graph")
       v.member_ids.should_not be_empty
     end

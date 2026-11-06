@@ -2,7 +2,44 @@
 
 ## Unreleased
 
+### Changed
+
+- The embedded catalog is now built from MITRE's XML (`cwec_vX.Y.xml`)
+  alone instead of the view-1000 CSV export plus the XML, and moves from
+  CWE 4.20 to **CWE 5.0** (2026-10-28). Notable upstream changes: 53
+  weaknesses dropped the parenthesised common name (CWE-79 is now
+  "Improper Neutralization of Input During Web Page Generation"), view 1000
+  is now "Complete Weakness Hierarchy", Categories are `<Grouping>`s (the
+  library still exposes them as `Category`), 15 new weaknesses, 9 new
+  categories, 3 new views, a new `Overlaps` relationship, and much of the
+  old `Extended_Description` text moved to `Technical_Nuance` (see Added) or
+  into consequence / introduction notes and background details.
+- **Behaviour change:** deprecated weaknesses are now part of the catalog
+  (28 in CWE 5.0; the CSV export left them out), so `CWE.find(71)` resolves
+  and `size` / `all` / `each` / `search` / `with_status` include them.
+  MITRE gives them no relationships, so they stay out of hierarchy walks;
+  filter with `reject(&.deprecated?)` for the previous set. (CWE 5.0 does
+  still list CWE-378 and CWE-379 as `ChildOf` the now-deprecated CWE-377.)
+- **Behaviour change:** `Mitigation#phase` is the first `<Phase>` instead
+  of the CSV's space-joined list (`"Implementation Architecture and
+  Design"`, not a valid phase, on 244 mitigations in 4.20 / 263 in 5.0); the
+  full list is the new `phases`.
+- Embedded JSON grows from 6.50 MB to 6.84 MB.
+
 ### Fixed
+
+- Data the CSV export lost or mangled now comes through from the XML
+  (counts against CWE 4.20 / 5.0):
+  - `Weakness#likelihood_of_exploit` was nil on every entry (185 / 184 set).
+  - `Mitigation#mitigation_id` and `DetectionMethod#method_id` were always
+    nil (527 / 528 and 483 / 580 set), and `effectiveness_notes` was nil on
+    every mitigation and detection method (227 values in 4.20).
+  - Double quotes and backslashes were stripped from names and text (1,390
+    values in 4.20), e.g. CWE-28 read `Path Traversal: '..filedir'` instead
+    of `Path Traversal: '..\filedir'`.
+  - CWE-1259's platform read `name: "Processor HardwareTECHNOLOGY
+    CLASS:Not Technology-Specific"` (missing `::` separator in the CSV); it
+    is `name: "Processor Hardware"`, `class_label: "Not Technology-Specific"`.
 
 - Text the build reads from MITRE's XML kept the file's pretty-printing
   whitespace and ignored the xhtml layout. `ExampleCode#code` lost the line
@@ -70,6 +107,13 @@
 
 ### Added
 
+- `Mitigation#phases` and `ModeOfIntroduction#phases` — every `<Phase>`
+  and `<Custom_Phase>` (CWE 5.0's AI / hardware lifecycle phases), in
+  order; `phase` is the first. JSON documents carrying only `phase` still
+  load.
+- `Weakness#technical_nuance` (`<Technical_Nuance>`, new in CWE 5.0),
+  emitted as `technicalNuance` and covered by `search`.
+- `Weakness#overlaps_relations` for CWE 5.0's `Overlaps` edges.
 - `Weakness#can_also_be_relations`, `#requires_relations` and
   `#starts_with_relations` — the three natures the catalog actually uses that
   had no accessor.

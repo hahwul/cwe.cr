@@ -234,7 +234,7 @@ module CWE
     catalog.members_of(id)
   end
 
-  # The MITRE catalog version embedded in this build (e.g. `"4.20"`).
+  # The MITRE catalog version embedded in this build (e.g. `"5.0"`).
   def self.catalog_version : String
     catalog.catalog_version
   end

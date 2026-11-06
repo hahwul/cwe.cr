@@ -79,7 +79,7 @@ weight = 1
 
 - Keep terminology consistent with the library: "Weakness", "Category", "View", "Catalog", "abstraction", "status", "consequence", "mitigation".
 - Use `CWE-79` style for ids in prose (always with the prefix).
-- The embedded catalog version (e.g. `4.20`) and counts (944 weaknesses, 422 categories, 59 views) drift as MITRE publishes new releases. Prefer "~944" phrasing over exact numbers unless the number is intrinsic to the example.
+- The embedded catalog version (e.g. `5.0`) and counts (984 weaknesses, 431 categories, 62 views) drift as MITRE publishes new releases. Prefer "~984" phrasing over exact numbers unless the number is intrinsic to the example.
 - Code samples must be valid Crystal that runs against the latest cwe.cr - copy from the repo's `examples/` directory when in doubt.
 
 ## Notes for AI Agents

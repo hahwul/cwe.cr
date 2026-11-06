@@ -44,7 +44,7 @@ CWE.categories.size  # => 422
 
 ```crystal
 v = CWE.view!(1000)
-v.name      # => "Research Concepts"
+v.name      # => "Complete Weakness Hierarchy"
 v.type      # => "Graph"
 v.status    # => CWE::Status::Draft
 v.objective # => "This view is intended to facilitate research..."
@@ -77,10 +77,11 @@ end
 
 ## When Categories and Views are missing
 
-Categories and Views are sourced from MITRE's XML supplement, not the CSV.
-If a build is run without the XML present at `data/cwec.xml`, the
-embedded catalog will contain Weaknesses only and `CWE.categories` /
-`CWE.views` will be empty. The shipping release always includes them.
+Everything is built from MITRE's XML catalog. CWE 5.0 renamed Categories to
+*Groupings* (`<Grouping>`) without changing their shape or ids; the library
+keeps calling them Categories, so `CWE.category!(227)` works on either
+release. A `Catalog.from_json` document without `categories` / `views` keys
+simply has none.
 
 ## See also
 

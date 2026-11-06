@@ -1,15 +1,15 @@
 # cwe.cr
 
 A Crystal implementation of the [MITRE CWE](https://cwe.mitre.org/) (Common
-Weakness Enumeration). The full CWE Research view (`view 1000`) is embedded at
-compile time, so lookups, search, and relationship traversal need no network
-access or sidecar data files.
+Weakness Enumeration). The full CWE catalog (5.0) is embedded at compile time,
+so lookups, search, and relationship traversal need no network access or
+sidecar data files.
 
 ```crystal
 require "cwe"
 
 w = CWE.find!("CWE-79")
-w.name        # => "Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+w.name        # => "Improper Neutralization of Input During Web Page Generation"
 w.abstraction # => CWE::Abstraction::Base
 w.status      # => CWE::Status::Stable
 w.url         # => "https://cwe.mitre.org/data/definitions/79.html"
@@ -58,16 +58,17 @@ Each `CWE::Weakness` exposes:
 | `structure` | `CWE::Structure` (`Simple`, `Composite`, `Chain`) |
 | `status` | `CWE::Status` (`Stable`, `Draft`, `Incomplete`, `Deprecated`, …) |
 | `description`, `extended_description` | `String?` |
+| `technical_nuance` | `String?` — CWE 5.0's home for much of the old extended description |
 | `likelihood_of_exploit` | `String?` |
-| `related_weaknesses` | `Array(CWE::Related)` — `ChildOf` / `PeerOf` / `CanPrecede` / `CanAlsoBe` / `Requires` / `StartsWith` |
+| `related_weaknesses` | `Array(CWE::Related)` — `ChildOf` / `PeerOf` / `CanPrecede` / `CanAlsoBe` / `Requires` / `StartsWith` / `Overlaps` |
 | `common_consequences` | `Array(CWE::Consequence)` — scopes + impacts + note |
-| `potential_mitigations` | `Array(CWE::Mitigation)` — phase + strategy + description |
+| `potential_mitigations` | `Array(CWE::Mitigation)` — id + phases + strategy + description |
 | `detection_methods` | `Array(CWE::DetectionMethod)` |
 | `observed_examples` | `Array(CWE::ObservedExample)` — CVE references |
 | `demonstrative_examples` | `Array(CWE::DemonstrativeExample)` — code samples (Bad/Good/Attack) |
 | `applicable_platforms` | `Array(CWE::ApplicablePlatform)` |
 | `alternate_terms` | `Array(CWE::AlternateTerm)` |
-| `modes_of_introduction` | `Array(CWE::ModeOfIntroduction)` |
+| `modes_of_introduction` | `Array(CWE::ModeOfIntroduction)` — phases + note |
 | `taxonomy_mappings` | `Array(CWE::TaxonomyMapping)` — PLOVER, OWASP, CAPEC, … |
 | `related_attack_patterns` | `Array(Int32)` — CAPEC ids |
 | `references` | `Array(CWE::ReferenceLink)` — `REF-N` citations |
@@ -191,11 +192,13 @@ the catalog organised around a stakeholder's perspective).
 
 ```crystal
 CWE.category!(227)  # => CWE::Category: "7PK - API Abuse" (10 members)
-CWE.view!(1000)     # => CWE::View: "Research Concepts" (Graph)
+CWE.view!(1000)     # => CWE::View: "Complete Weakness Hierarchy" (Graph)
 CWE.members_of(1000) # => Array(CWE::Weakness) — the resolved members
 
-# MITRE retires far more Categories and Views than Weaknesses (35 and 4 in
-# CWE 4.20); both expose the same predicate a Weakness does:
+# Deprecated entries stay in the catalog so old ids still resolve (28
+# Weaknesses, 35 Categories and 4 Views in CWE 5.0); all three expose the
+# same predicate:
+CWE.find!(71).deprecated?    # => true ("DEPRECATED: Apple '.DS_Store'")
 CWE.category!(1).deprecated? # => true ("DEPRECATED: Location")
 CWE.view!(630).deprecated?   # => true
 
@@ -214,11 +217,11 @@ CWE.entry(99999) # => nil
 ### Catalog metadata
 
 ```crystal
-CWE.catalog_version           # => "4.20"
-CWE.size                      # => 944  (weaknesses)
-CWE.categories.size           # => 422
-CWE.views.size                # => 59
-CWE.external_references.size  # => 1026
+CWE.catalog_version           # => "5.0"
+CWE.size                      # => 984  (weaknesses, 28 of them deprecated)
+CWE.categories.size           # => 431  (MITRE's `<Grouping>`s since CWE 5.0)
+CWE.views.size                # => 62
+CWE.external_references.size  # => 1081
 ```
 
 ## Examples
@@ -243,20 +246,17 @@ Run the test suite:
 crystal spec
 ```
 
-Regenerate the embedded data blob from a fresh MITRE CWE export:
+Regenerate the embedded data blob from MITRE's XML catalog:
 
 ```sh
-# Drop both files at data/, then:
-#   data/cwec.csv         — MITRE "view 1000" CSV
-#   data/cwec_v4.20.xml   — full XML (needed for Categories, Views,
-#                           Demonstrative_Examples, Mapping_Notes,
-#                           References, Content_History, Audience)
-crystal run data/build_data.cr
+curl -LO https://cwe.mitre.org/data/xml/cwec_latest.xml.zip
+unzip cwec_latest.xml.zip -d data/   # data/cwec_vX.Y.xml (not committed)
+crystal run data/build_data.cr       # reads the newest data/cwec_v*.xml
 crystal spec
 ```
 
-The build is incremental — without the XML the catalog still loads, it
-just won't include Categories, Views, or any of the XML-only blocks.
+The XML is the only input; the catalog version comes from its root
+`Version` attribute (`$CWE_CATALOG_VERSION` overrides it).
 
 The embedded data lives at `src/cwe/data/weaknesses.json` and is read into
 the binary at compile time via `{{ read_file(...) }}`.

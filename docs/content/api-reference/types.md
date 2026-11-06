@@ -69,8 +69,9 @@ end
 
 ```crystal
 struct CWE::Mitigation
-  mitigation_id       : String?   # JSON: "mitigationId"
-  phase               : String?   # "Architecture and Design", "Implementation", "Operation", …
+  mitigation_id       : String?   # JSON: "mitigationId", e.g. "MIT-4"
+  phase               : String?   # first of `phases`
+  phases              : Array(String) # every <Phase>/<Custom_Phase>: "Architecture and Design", "Implementation", …
   strategy            : String?
   description         : String?
   effectiveness       : String?
@@ -113,8 +114,9 @@ end
 
 ```crystal
 struct CWE::ModeOfIntroduction
-  phase : String # "Implementation", "Architecture and Design", "Operation", …
-  note  : String?
+  phase  : String        # first of `phases`
+  note   : String?
+  phases : Array(String) # "Implementation", "Architecture and Design", "Operation", …
 end
 ```
 

@@ -4,7 +4,7 @@ module CWE
   # An informal grouping of weaknesses. MITRE marks Categories as
   # "Mapping Prohibited" — they exist for browsing/aggregation, not for
   # assigning to a CVE. Use `Catalog#category` / `CWE.category` to look one
-  # up by id.
+  # up by id. CWE 5.0 renamed them `<Grouping>`; ids and shape are unchanged.
   class Category
     include Comparable(Category)
 
@@ -38,8 +38,8 @@ module CWE
       false # Categories are always Mapping_Prohibited per MITRE policy.
     end
 
-    # True if the catalog marks this category deprecated. 35 of the 422
-    # categories in CWE 4.20 are; MITRE keeps them numbered so old references
+    # True if the catalog marks this category deprecated. 35 of the 431
+    # categories in CWE 5.0 are; MITRE keeps them numbered so old references
     # still resolve, and renames them with a `DEPRECATED:` prefix.
     def deprecated? : Bool
       @status == Status::Deprecated || @name.starts_with?("DEPRECATED:")
