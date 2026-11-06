@@ -30,7 +30,7 @@ OUT_PATH = File.join(OUT_DIR, "weaknesses.json")
 # `cwec_v4.9.xml` sorts after `cwec_v4.20.xml` as a string, so compare the
 # version numerically.
 def newest_xml : String?
-  Dir.glob(File.join(ROOT, "data", "cwec_v*.xml")).max_by? do |f|
+  Dir.glob(File.join(ROOT, "data", "cwec*.xml")).max_by? do |f|
     (File.basename(f)[/[\d.]+\d/]? || "0").split('.').map(&.to_i)
   end
 end
@@ -336,9 +336,12 @@ def texts_of_children(parent : XML::Node, local : String) : Array(JSON::Any)
   end
 end
 
-# Every `<Phase>` and `<Custom_Phase>` of an Introduction / Mitigation, in
-# document order. Schema 8.0 (CWE 5.0) added `Custom_Phase` for AI and
-# hardware lifecycles; it is a phase like any other, so it is listed too.
+# Every `<Phase>` and `<Custom_Phase>` of an Introduction / Mitigation /
+# Detection_Method, in document order. Schema 8.0 (CWE 5.0) added
+# `Custom_Phase` for AI and hardware lifecycles (`Training`, `Hardware
+# Architecture`, …); it is a phase like any other, so it is listed too.
+# ponytail: its `Domain` ("AI" / "Hardware") is not kept; add a structured
+# phase type if callers need to tell custom phases apart.
 def phases_of(node : XML::Node) : Array(JSON::Any)
   node.children.compact_map do |c|
     next unless c.element? && c.name.in?("Phase", "Custom_Phase")
@@ -428,6 +431,7 @@ def parse_weakness(wn : XML::Node, id : Int32) : Hash(String, JSON::Any)
       rows = children_named(child, "Detection_Method").map do |d|
         inner = {"method" => str(text_of_child(d, "Method") || "")}
         put(inner, "method_id", d["Detection_Method_ID"]?)
+        put_list(inner, "phases", phases_of(d))
         put(inner, "description", text_of_child(d, "Description"))
         put(inner, "effectiveness", text_of_child(d, "Effectiveness"))
         put(inner, "effectiveness_notes", text_of_child(d, "Effectiveness_Notes"))
@@ -567,7 +571,13 @@ abort "missing XML: #{xml_path}" unless File.exists?(xml_path)
 FileUtils.mkdir_p(OUT_DIR)
 
 doc = XML.parse(File.read(xml_path))
-root = doc.root || abort "empty XML: #{xml_path}"
+# libxml2 recovers from a truncated or broken file and hands back whatever it
+# managed to read; that must never become the embedded catalog.
+if (errors = doc.errors) && !errors.empty?
+  abort "malformed XML #{xml_path}: #{errors.first.message}"
+end
+root = doc.root
+abort "not a CWE catalog: #{xml_path}" unless root && root.name == "Weakness_Catalog"
 
 weaknesses = [] of Hash(String, JSON::Any)
 categories = [] of Hash(String, JSON::Any)
@@ -595,6 +605,11 @@ root.children.each do |group|
       external_refs << parse_external_reference(node, rid)
     end
   end
+end
+
+{"weaknesses" => weaknesses, "categories" => categories, "views" => views,
+ "external references" => external_refs}.each do |label, list|
+  abort "no #{label} in #{xml_path}" if list.empty?
 end
 
 # Sort by ID for stable diffs
