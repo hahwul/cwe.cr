@@ -545,6 +545,14 @@ module CWE
                    @comments = nil,
                    @reasons = [] of String,
                    @suggestions = [] of MappingSuggestion)
+      after_initialize
+    end
+
+    # `to_json` leaves out a `rawUsage` equal to the canonical label, so a
+    # known `usage` without a raw label stands for that label; JSON::Serializable
+    # calls this after reading. Without it a round-trip came back unequal.
+    def after_initialize
+      @raw_usage ||= @usage.to_s unless @usage.other?
     end
   end
 
