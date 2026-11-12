@@ -34,7 +34,13 @@ module CWE
         return existing
       end
       @@default_mutex.synchronize do
-        @@default.get(:acquire) || from_json(EMBEDDED_JSON).tap { |c| @@default.set(c, :release) }
+        if existing = @@default.get(:acquire)
+          existing
+        else
+          catalog = from_json(EMBEDDED_JSON)
+          @@default.set(catalog, :release)
+          catalog
+        end
       end
     end
 

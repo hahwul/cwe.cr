@@ -37,9 +37,12 @@ describe "CWE JSON serialization" do
       restored.should eq(notes)
       CWE.all.compact_map(&.mapping_notes)
         .reject { |n| CWE::MappingNotes.from_json(n.to_json) == n }.should be_empty
-      built = CWE::MappingNotes.new(usage: CWE::MappingUsage::Discouraged)
-      CWE::MappingNotes.from_json(built.to_json).should eq(built)
-      CWE::MappingNotes.new.raw_usage.should be_nil
+      # Only reading fills it in; a hand-built value keeps what it was given.
+      CWE::MappingNotes.new(usage: CWE::MappingUsage::Discouraged).raw_usage.should be_nil
+      # An `Other` usage cannot stand for its raw label, so that is kept.
+      other = CWE::MappingNotes.new(usage: CWE::MappingUsage::Other, raw_usage: "Other")
+      CWE::MappingNotes.from_json(other.to_json).should eq(other)
+      CWE::MappingNotes.from_json(CWE::MappingNotes.new.to_json).raw_usage.should be_nil
     end
 
     it "round-trips the reasons and suggestions lists" do
