@@ -542,29 +542,22 @@ def parse_view(view : XML::Node, id : Int32) : Hash(String, JSON::Any)
   entry
 end
 
+REFERENCE_FIELDS = {
+  "Title" => "title", "Edition" => "edition", "Publication" => "publication",
+  "Publication_Year" => "publication_year", "Publication_Month" => "publication_month",
+  "Publication_Day" => "publication_day", "Publisher" => "publisher",
+  "URL" => "url", "URL_Date" => "url_date",
+}
+
+# An empty element is absent here as everywhere else: MITRE ships at least
+# one empty `<Author></Author>` (REF-1466 in CWE 5.0), which names no one.
 def parse_external_reference(er : XML::Node, rid : String) : Hash(String, JSON::Any)
   entry = {"reference_id" => str(rid)}
-  authors = [] of JSON::Any
   er.children.each do |c|
-    next unless c.element?
-    case c.name
-    # MITRE ships at least one empty `<Author></Author>` (REF-1466 in CWE
-    # 5.0); it names no one, so it is not an author.
-    when "Author"
-      a = render_prose(c)
-      authors << str(a) unless a.empty?
-    when "Title"             then entry["title"] = str(render_prose(c))
-    when "Edition"           then entry["edition"] = str(render_prose(c))
-    when "Publication"       then entry["publication"] = str(render_prose(c))
-    when "Publication_Year"  then entry["publication_year"] = str(render_prose(c))
-    when "Publication_Month" then entry["publication_month"] = str(render_prose(c))
-    when "Publication_Day"   then entry["publication_day"] = str(render_prose(c))
-    when "Publisher"         then entry["publisher"] = str(render_prose(c))
-    when "URL"               then entry["url"] = str(render_prose(c))
-    when "URL_Date"          then entry["url_date"] = str(render_prose(c))
-    end
+    next unless c.element? && (key = REFERENCE_FIELDS[c.name]?)
+    put(entry, key, render_prose(c))
   end
-  put_list(entry, "authors", authors)
+  put_list(entry, "authors", texts_of_children(er, "Author"))
   entry
 end
 

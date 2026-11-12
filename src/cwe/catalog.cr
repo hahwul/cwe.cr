@@ -178,11 +178,12 @@ module CWE
       arr.select { |e| !e.as_h?.nil? }
     end
 
-    # String elements of the array at `key`; other elements are skipped.
+    # Non-empty string elements of the array at `key`; other elements are
+    # skipped, so an empty string reads as absent, as it does in `s`.
     private def self.strings(j : ::JSON::Any, key : String) : Array(String)
       node = field(j, key) || return [] of String
       arr = node.as_a? || return [] of String
-      arr.compact_map(&.as_s?)
+      arr.compact_map(&.as_s?.presence)
     end
 
     # Int32 elements of the array at `key`; other elements are skipped.
