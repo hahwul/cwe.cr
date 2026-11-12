@@ -646,6 +646,39 @@ describe CWE do
       members.should_not be_empty
       members.all?(CWE::Weakness).should be_true
     end
+
+    it "member_entries_of returns a view's direct members, Categories included" do
+      entries = CWE.member_entries_of(699)
+      entries.map(&.id).should eq(CWE.view!(699).member_ids)
+      entries.all?(CWE::Category).should be_true
+      CWE.member_entries_of("CWE-1000").map(&.id).should eq(CWE.members_of(1000).map(&.id))
+      CWE.member_entries_of(99999).should be_empty
+      CWE.member_entries_of("nope").should be_empty
+    end
+
+    it "members_of(resolve_categories: true) reaches Weaknesses through member Categories" do
+      CWE.members_of(1400).should be_empty
+      resolved = CWE.members_of(1400, resolve_categories: true)
+      expected = CWE.view!(1400).member_ids.flat_map { |c| CWE.members_of(c) }.uniq!(&.id)
+      resolved.map(&.id).sort!.should eq(expected.map(&.id).sort!)
+      resolved.size.should be > 900 # 1400 categorises the whole weakness catalog
+      # A Weakness-only view resolves to the same list as without the flag.
+      CWE.members_of(1000, resolve_categories: true).map(&.id).should eq(CWE.members_of(1000).map(&.id))
+    end
+
+    it "members_of(resolve_categories: true) follows nested Categories and survives cycles" do
+      # SFP view 888 -> cluster 889 -> secondary clusters 960..962 -> weaknesses
+      CWE.category!(889).member_ids.should contain(960)
+      CWE.members_of(888, resolve_categories: true).map(&.id).should contain(CWE.members_of(960).first.id)
+      doc = {
+        "weaknesses" => [{"id" => 1, "name" => "a"}, {"id" => 2, "name" => "b"}],
+        "categories" => [
+          {"id" => 10, "members" => [{"cwe_id" => 1}, {"cwe_id" => 11}]},
+          {"id" => 11, "members" => [{"cwe_id" => 10}, {"cwe_id" => 2}, {"cwe_id" => 1}]},
+        ],
+      }.to_json
+      CWE::Catalog.from_json(doc).members_of(10, resolve_categories: true).map(&.id).should eq([1, 2])
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -801,6 +834,32 @@ describe CWE do
       ch.should_not be_nil
       ch.not_nil!.submission_date.should_not be_nil
       ch.not_nil!.modification_count.should be > 0
+    end
+
+    it "keeps every Submission (CWE-1461 has two co-submitters)" do
+      ch = CWE.find!(1461).content_history.not_nil!
+      ch.submissions.map(&.name).should eq(["Raghul Saravanan", "Sudipta Paria"])
+      ch.submissions.map(&.organization).should eq(["George Mason University", "University of Florida"])
+      ch.submission_name.should eq("Raghul Saravanan")
+      ch.submission_organization.should eq("George Mason University")
+      ch.submission_date.should eq("2025-05-20")
+      CWE.find!(79).content_history.not_nil!.submissions.size.should eq(1)
+    end
+
+    it "reads the pre-submissions flat shape as a single submission" do
+      doc = {"weaknesses" => [{"id" => 79, "content_history" => {
+        "submission_name" => "PLOVER", "submission_date" => "2006-07-19",
+      }}]}.to_json
+      ch = CWE::Catalog.from_json(doc).find!(79).content_history.not_nil!
+      ch.submission_name.should eq("PLOVER")
+      ch.submissions.map { |x| {x.name, x.organization, x.date} }.should eq([{"PLOVER", nil, "2006-07-19"}])
+    end
+  end
+
+  describe "superscripts in prose" do
+    it "renders <sup> as ^ instead of gluing it to the base (CWE-1241)" do
+      text = CWE.find!(1241).demonstrative_examples.flat_map(&.body_text).find!(&.includes?("polynomial"))
+      text.should contain("P(x) = x^6+x^4+x^3+1")
     end
   end
 

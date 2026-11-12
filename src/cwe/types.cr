@@ -560,9 +560,25 @@ module CWE
     end
   end
 
+  # One `<Submission>` from an entry's `Content_History`.
+  struct Submission
+    include JSON::Serializable
+
+    getter name : String?
+    getter organization : String?
+    getter date : String?
+
+    def initialize(@name = nil, @organization = nil, @date = nil)
+    end
+  end
+
   # Compact view of an entry's revision history. The full XML record
   # contains a verbose list of modifications; we expose only the most
-  # commonly queried fields (first submission, latest modification).
+  # commonly queried fields (submissions, latest modification).
+  #
+  # The schema allows several `<Submission>`s (CWE-1461 has two
+  # co-submitters): `submissions` lists them all, and the `submission_*`
+  # getters are the first one.
   struct ContentHistory
     include JSON::Serializable
 
@@ -581,11 +597,23 @@ module CWE
     @[JSON::Field(key: "modificationCount")]
     getter modification_count : Int32
 
+    getter submissions : Array(Submission) = [] of Submission
+
+    # Given only `submissions`, the `submission_*` fields come from the first;
+    # given only those fields, they become the single submission.
     def initialize(@submission_date = nil,
                    @submission_name = nil,
                    @submission_organization = nil,
                    @last_modification_date = nil,
-                   @modification_count = 0)
+                   @modification_count = 0,
+                   @submissions = [] of Submission)
+      if first = @submissions.first?
+        @submission_date ||= first.date
+        @submission_name ||= first.name
+        @submission_organization ||= first.organization
+      elsif @submission_date || @submission_name || @submission_organization
+        @submissions = [Submission.new(@submission_name, @submission_organization, @submission_date)]
+      end
     end
   end
 

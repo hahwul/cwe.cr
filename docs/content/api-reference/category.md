@@ -42,8 +42,16 @@ To turn member ids into `Weakness` objects:
 CWE.members_of(cat.id) # => Array(Weakness)
 ```
 
-Members that point at Categories or Views (rare nesting) are skipped by
-`members_of` — use `cat.members` for the raw edges.
+`members_of` skips members that are Categories. Some categories nest them
+(SFP cluster 889 holds 960–962), and most Graph views are made only of them.
+Two other calls cover those members:
+
+```crystal
+CWE.member_entries_of(889)                       # => Array(Weakness | Category | View), as listed
+CWE.members_of(889, resolve_categories: true)    # => Weaknesses of nested Categories too
+```
+
+`cat.members` keeps the raw edges.
 
 ## Comparable, Equality, Hash
 

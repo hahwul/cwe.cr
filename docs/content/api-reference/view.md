@@ -42,6 +42,14 @@ CWE.members_of(v.id).first(5).map(&.cwe_id)
 # => ["CWE-284", "CWE-435", "CWE-664", "CWE-682", "CWE-691"]
 ```
 
+Most Graph views (699, 700, 1400, the OWASP / CERT / SFP views) have only
+Categories as members, so `members_of` is `[]` for them. Use one of these:
+
+```crystal
+CWE.member_entries_of(699)                      # => the 40 Categories, as listed
+CWE.members_of(1400, resolve_categories: true)  # => Weaknesses in those Categories
+```
+
 ## See also
 
 - [User Guide: Categories & Views](/user-guide/categories-and-views/)
