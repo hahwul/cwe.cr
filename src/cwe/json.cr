@@ -4,7 +4,7 @@ require "./types"
 
 # JSON serialization for `CWE::Weakness`.
 #
-# The emitted shape is stable and snake_case. Empty arrays and nil scalars
+# The emitted shape is stable and camelCase. Empty arrays and nil scalars
 # are omitted so a serialized entry is concise. The catalog identifier
 # (`"CWE-79"`) is emitted as `"cweId"` alongside the integer `"id"` for
 # tooling that wants either form.

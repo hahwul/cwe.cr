@@ -4,7 +4,7 @@ require "json"
 # =============================================================================
 # JSON serialization
 # =============================================================================
-# Every Weakness can be emitted as JSON. The shape is stable and snake_case
+# Every Weakness can be emitted as JSON. The shape is stable and camelCase
 # at the top level (`cweId`, `commonConsequences`, …); empty arrays and nil
 # scalars are omitted.
 

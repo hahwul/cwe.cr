@@ -131,6 +131,15 @@ describe CWE::Catalog do
       end
     end
 
+    it "reads an empty string in a string list as absent" do
+      cat = CWE::Catalog.from_json({
+        "weaknesses"          => [{"id" => 1, "name" => "x", "background_details" => ["", "kept"]}],
+        "external_references" => [{"reference_id" => "REF-1", "authors" => [""]}],
+      }.to_json)
+      cat.external_reference!("REF-1").authors.should be_empty
+      cat.find!(1).background_details.should eq(["kept"])
+    end
+
     it "accepts an IO as well as a String" do
       io = IO::Memory.new(catalog_doc([{"id" => 79, "name" => "From IO"}]))
       CWE::Catalog.from_json(io).find!(79).name.should eq("From IO")
@@ -223,6 +232,12 @@ describe CWE::Catalog do
       ref.title.should_not be_nil
       ref.url.should_not be_nil
       ref.authors.should_not be_empty
+    end
+
+    # cwec_v5.0.xml gives REF-1466 a single empty `<Author></Author>`; an
+    # empty element names no one, so it must not become an author.
+    it "never lists an empty author" do
+      CWE.external_references.flat_map(&.authors).should_not contain("")
     end
 
     it "returns nil rather than raising for an unparseable id" do
