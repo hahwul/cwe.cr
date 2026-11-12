@@ -225,13 +225,23 @@ module CWE
     catalog.entry(id)
   end
 
-  # Resolved member weaknesses of a Category or View.
-  def self.members_of(id : Int) : Array(Weakness)
-    catalog.members_of(id)
+  # Direct members (Weaknesses, Categories, Views) of a Category or View.
+  def self.member_entries_of(id : Int) : Array(Weakness | Category | View)
+    catalog.member_entries_of(id)
   end
 
-  def self.members_of(id : String) : Array(Weakness)
-    catalog.members_of(id)
+  def self.member_entries_of(id : String) : Array(Weakness | Category | View)
+    catalog.member_entries_of(id)
+  end
+
+  # Member Weaknesses of a Category or View; `resolve_categories: true` also
+  # collects those of member Categories (see `Catalog#members_of`).
+  def self.members_of(id : Int, resolve_categories : Bool = false) : Array(Weakness)
+    catalog.members_of(id, resolve_categories)
+  end
+
+  def self.members_of(id : String, resolve_categories : Bool = false) : Array(Weakness)
+    catalog.members_of(id, resolve_categories)
   end
 
   # The MITRE catalog version embedded in this build (e.g. `"5.0"`).

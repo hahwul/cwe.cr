@@ -29,7 +29,15 @@
   `<Custom_Phase>` instead of the CSV's space-joined list (`"Implementation Architecture and
   Design"`, not a valid phase, on 244 mitigations in 4.20 / 263 in 5.0); the
   full list is the new `phases`.
-- Embedded JSON grows from 6.50 MB to 6.84 MB.
+- Prose keeps `<sup>` / `<sub>` as `^` / `_` instead of gluing them to the
+  base the way MITRE's CSV does: CWE-1241's (and CWE-330's) LFSR example now
+  reads `P(x) = x^6+x^4+x^3+1`, not `x6+x4+x3+1`. Those are the only
+  superscripts in CWE 5.0, and it has no subscripts. A Body_Text holding only
+  an image is still dropped.
+- The embedded JSON stores `content_history.submissions` (see Added) in
+  place of the flat `submission_*` keys. `Catalog.from_json` still reads the
+  flat shape.
+- Embedded JSON grows from 6.50 MB to 6.82 MB.
 
 ### Fixed
 
@@ -128,6 +136,16 @@
   `descendants_of`, `pillar_of`, `members_of`) accept string ids
   (`"CWE-79"`), like `find` already did.
 - `max_depth` is reachable through `CWE.ancestors_of` / `CWE.descendants_of`.
+- `members_of(id, resolve_categories: true)` also collects the Weaknesses of
+  member Categories, nested ones included. Most Graph views (699, 700, 1400,
+  the OWASP / CERT / SFP views, ...) list only Categories, so plain
+  `members_of` is `[]` for them. That has not changed. `member_entries_of(id)`
+  returns a Category's or View's direct members as `Weakness | Category |
+  View`, the way its `Has_Member`s list them.
+- `ContentHistory#submissions` holds every `<Submission>` (CWE-1461 has two
+  co-submitters) as `CWE::Submission` (`name`, `organization`, `date`), and
+  is emitted as `submissions`. `submission_name` / `_organization` / `_date`
+  stay the first one's.
 
 ## v0.1.0
 

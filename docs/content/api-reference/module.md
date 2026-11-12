@@ -63,7 +63,8 @@ All accept an optional `view_id:` filter.
 | `CWE.view(id)`          | `View?`           |
 | `CWE.view!(id)`         | `View`            |
 | `CWE.views`             | `Array(View)`     |
-| `CWE.members_of(id)`    | `Array(Weakness)` (resolved members of a Category or View) |
+| `CWE.members_of(id, resolve_categories = false)` | `Array(Weakness)` (member Weaknesses of a Category or View; `true` adds those of member Categories) |
+| `CWE.member_entries_of(id)` | `Array(Weakness \| Category \| View)` (direct members, as listed) |
 
 ## Metadata
 

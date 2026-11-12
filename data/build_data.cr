@@ -109,12 +109,22 @@ end
 
 # Running text as one line, the way MITRE's own CSV export flattens the same
 # xhtml: block boundaries and `br` become a space and whitespace collapses.
+# Unlike the CSV, `sup` / `sub` keep their meaning as `^` / `_` (CWE-1241's
+# `x<sup>6</sup>` is `x^6`, not `x6`), parenthesised unless a single word
+# not followed by one. Example_Code is left alone: `^` / `_` mean other things
+# in code, and no CWE 5.0 code uses either tag.
 def render_prose(node : XML::Node) : String
   io = String::Builder.new
   walk = uninitialized XML::Node -> Nil
   walk = ->(n : XML::Node) do
     n.children.each do |c|
-      if c.element?
+      if c.element? && c.name.in?("sup", "sub")
+        inner = render_prose(c)
+        next if inner.empty?
+        # `x<sup>2</sup>y` must not read as x^(2y).
+        bare = inner.matches?(/\A\w+\z/) && !c.next_sibling.try { |n| n.text? && n.content.starts_with?(/\w/) }
+        io << (c.name == "sup" ? '^' : '_') << (bare ? inner : "(#{inner})")
+      elsif c.element?
         block = c.name == "br" || c.name.in?("td", "th") || XHTML_BLOCKS.includes?(c.name)
         io << ' ' if block
         walk.call(c)
@@ -187,17 +197,16 @@ end
 # Parses `<Content_History>` into a compact summary record.
 def parse_content_history(node : XML::Node) : Hash(String, JSON::Any)
   h = {} of String => JSON::Any
-  if sub = child_named(node, "Submission")
-    if d = text_of_child(sub, "Submission_Date")
-      h["submission_date"] = JSON::Any.new(d)
+  # The schema allows several `<Submission>`s (CWE-1461 has two co-submitters).
+  subs = children_named(node, "Submission").compact_map do |sub|
+    s = {} of String => JSON::Any
+    {"name" => "Submission_Name", "organization" => "Submission_Organization",
+     "date" => "Submission_Date"}.each do |key, el|
+      text_of_child(sub, el).try { |t| s[key] = JSON::Any.new(t) }
     end
-    if n = text_of_child(sub, "Submission_Name")
-      h["submission_name"] = JSON::Any.new(n)
-    end
-    if o = text_of_child(sub, "Submission_Organization")
-      h["submission_organization"] = JSON::Any.new(o)
-    end
+    JSON::Any.new(s) unless s.empty?
   end
+  put_list(h, "submissions", subs)
   mods = children_named(node, "Modification")
   h["modification_count"] = JSON::Any.new(mods.size.to_i64)
   if last = mods.last?

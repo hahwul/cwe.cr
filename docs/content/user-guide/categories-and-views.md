@@ -53,6 +53,17 @@ v.member_ids.size # => number of top-level pillar entries
 
 `CWE.views` returns the sorted list (62 entries).
 
+Most Graph views are made of Categories, not Weaknesses: 699 (Software
+Development), 700 (Seven Pernicious Kingdoms), 1194 (Hardware Design), 1400
+(Comprehensive Categorization), and the OWASP, CERT and SFP views. For those,
+`CWE.members_of(id)` is `[]`. Use one of these:
+
+```crystal
+CWE.member_entries_of(699)       # => the 40 Categories, as the view lists them
+CWE.members_of(1400, resolve_categories: true).size
+# => every Weakness in 1400's Categories (nested Categories followed, each once)
+```
+
 ## Unified entry lookup
 
 If you don't know which kind of entity an id refers to, use `CWE.entry`:

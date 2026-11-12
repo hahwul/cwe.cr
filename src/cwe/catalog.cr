@@ -299,7 +299,12 @@ module CWE
         submission_organization: s(j, "submission_organization"),
         last_modification_date: s(j, "last_modification_date"),
         modification_count: i32(j, "modification_count") || 0,
+        submissions: objects(j, "submissions").map { |x| parse_submission(x) },
       )
+    end
+
+    private def self.parse_submission(j : ::JSON::Any) : Submission
+      Submission.new(name: s(j, "name"), organization: s(j, "organization"), date: s(j, "date"))
     end
 
     private def self.parse_demonstrative_example(j : ::JSON::Any) : DemonstrativeExample
@@ -708,23 +713,54 @@ module CWE
       find(id) || category(id) || view(id)
     end
 
-    # Member weaknesses (resolved) of a category or view. Members that
-    # reference Categories or Views (rare nesting) are skipped — use
-    # `Category#members` / `View#members` for the raw edge list.
-    def members_of(id : Int) : Array(Weakness)
-      mem_ids = if cat = category(id)
-                  cat.member_ids
-                elsif v = view(id)
-                  v.member_ids
-                else
-                  return [] of Weakness
-                end
-      mem_ids.compact_map { |m| find(m) }
+    # Direct members of a Category or View exactly as its `Has_Member`s list
+    # them, resolved to whichever kind each id is. Most Graph views (699,
+    # 700, 1400, the OWASP / CERT / SFP views, ...) are made of Categories
+    # rather than Weaknesses, so this is their real top level. Ids not in
+    # the catalog are skipped; `Category#members` / `View#members` keep the
+    # raw edges.
+    def member_entries_of(id : Int) : Array(Weakness | Category | View)
+      member_ids_of(id).compact_map { |m| entry(m) }
     end
 
-    def members_of(id : String) : Array(Weakness)
+    def member_entries_of(id : String) : Array(Weakness | Category | View)
+      i = CWE.parse_id?(id) || return [] of Weakness | Category | View
+      member_entries_of(i)
+    end
+
+    # The Weaknesses among the direct members of a Category or View. Views
+    # built from Categories (699, 700, 1400, ...) have none, so this is `[]`
+    # for them; pass `resolve_categories: true` to also collect the
+    # Weaknesses of member Categories (and of Categories nested in those),
+    # direct members first, each Weakness once. `member_entries_of` returns
+    # the Categories themselves.
+    def members_of(id : Int, resolve_categories : Bool = false) : Array(Weakness)
+      ids = member_ids_of(id)
+      return ids.compact_map { |m| find(m) } unless resolve_categories
+      found = [] of Weakness
+      seen = Set(Int32).new
+      narrow_id(id).try { |i| seen << i }
+      queue = Deque{ids}
+      while level = queue.shift?
+        level.each do |m|
+          next unless seen.add?(m)
+          if w = find(m)
+            found << w
+          elsif cat = category(m)
+            queue << cat.member_ids
+          end
+        end
+      end
+      found
+    end
+
+    def members_of(id : String, resolve_categories : Bool = false) : Array(Weakness)
       i = CWE.parse_id?(id) || return [] of Weakness
-      members_of(i)
+      members_of(i, resolve_categories)
+    end
+
+    private def member_ids_of(id : Int) : Array(Int32)
+      (category(id) || view(id)).try(&.member_ids) || [] of Int32
     end
 
     # ---------- Filters ----------

@@ -73,7 +73,7 @@ Each `CWE::Weakness` exposes:
 | `related_attack_patterns` | `Array(Int32)` — CAPEC ids |
 | `references` | `Array(CWE::ReferenceLink)` — `REF-N` citations |
 | `mapping_notes` | `CWE::MappingNotes?` — usage policy + rationale |
-| `content_history` | `CWE::ContentHistory?` — submission / last-modification dates |
+| `content_history` | `CWE::ContentHistory?` — submissions (all of them, `submissions`) / last-modification date |
 | `notes` | `Array(CWE::Note)` |
 
 Convenience helpers:
@@ -193,7 +193,7 @@ the catalog organised around a stakeholder's perspective).
 ```crystal
 CWE.category!(227)  # => CWE::Category: "7PK - API Abuse" (10 members)
 CWE.view!(1000)     # => CWE::View: "Complete Weakness Hierarchy" (Graph)
-CWE.members_of(1000) # => Array(CWE::Weakness) — the resolved members
+CWE.members_of(1000) # => Array(CWE::Weakness) — the member Weaknesses
 
 # Deprecated entries stay in the catalog so old ids still resolve (28
 # Weaknesses, 35 Categories and 4 Views in CWE 5.0); all three expose the
@@ -202,10 +202,12 @@ CWE.find!(71).deprecated?    # => true ("DEPRECATED: Apple '.DS_Store'")
 CWE.category!(1).deprecated? # => true ("DEPRECATED: Location")
 CWE.view!(630).deprecated?   # => true
 
-# `members_of` resolves only the Weakness members. Views built out of
-# Categories (699 = Software Development, 1194 = Hardware Design) have none,
-# so reach for the raw edges there:
-CWE.view!(699).members.map { |m| CWE.entry(m.cwe_id) }
+# `members_of` returns only the Weakness members. Most Graph views (699 =
+# Software Development, 700 = Seven Pernicious Kingdoms, 1400 =
+# Comprehensive Categorization, the OWASP / CERT views) list only
+# Categories, so it is empty there. Use either of these instead:
+CWE.member_entries_of(699)                      # => the 40 Categories themselves
+CWE.members_of(1400, resolve_categories: true)  # => Weaknesses in its Categories
 
 # Unified lookup when you don't know which kind of entity an id refers to:
 CWE.entry(79)    # => Weakness

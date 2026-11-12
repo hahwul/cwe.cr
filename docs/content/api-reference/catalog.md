@@ -96,7 +96,9 @@ catalog.view!(id)
 
 ```crystal
 catalog.entry(id)      # Weakness | Category | View | Nil
-catalog.members_of(id) # Array(Weakness) — resolved members of a Category or View
+catalog.members_of(id)                          # Array(Weakness) — member Weaknesses of a Category or View
+catalog.members_of(id, resolve_categories: true) # ... plus those of member Categories, nested too
+catalog.member_entries_of(id)                   # Array(Weakness | Category | View) — direct members
 ```
 
 ## See also
