@@ -548,7 +548,11 @@ def parse_external_reference(er : XML::Node, rid : String) : Hash(String, JSON::
   er.children.each do |c|
     next unless c.element?
     case c.name
-    when "Author"            then authors << str(render_prose(c))
+    # MITRE ships at least one empty `<Author></Author>` (REF-1466 in CWE
+    # 5.0); it names no one, so it is not an author.
+    when "Author"
+      a = render_prose(c)
+      authors << str(a) unless a.empty?
     when "Title"             then entry["title"] = str(render_prose(c))
     when "Edition"           then entry["edition"] = str(render_prose(c))
     when "Publication"       then entry["publication"] = str(render_prose(c))

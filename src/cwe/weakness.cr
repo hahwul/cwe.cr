@@ -10,9 +10,9 @@ module CWE
   #
   # ```
   # w = CWE.find!("CWE-79")
-  # w.name                  # => "Improper Neutralization of Input During Web Page Generation"
-  # w.abstraction           # => CWE::Abstraction::Base
-  # w.parents.map(&.cwe_id) # => [74]
+  # w.name                           # => "Improper Neutralization of Input During Web Page Generation"
+  # w.abstraction                    # => CWE::Abstraction::Base
+  # w.parent_relations.map(&.cwe_id) # => [74, 74]
   # ```
   class Weakness
     include Comparable(Weakness)

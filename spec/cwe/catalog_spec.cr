@@ -225,6 +225,13 @@ describe CWE::Catalog do
       ref.authors.should_not be_empty
     end
 
+    # cwec_v5.0.xml gives REF-1466 a single empty `<Author></Author>`; an
+    # empty element names no one, so it must not become an author.
+    it "never lists an empty author" do
+      CWE.external_reference!("REF-1466").authors.should be_empty
+      CWE.external_references.flat_map(&.authors).should_not contain("")
+    end
+
     it "returns nil rather than raising for an unparseable id" do
       CWE.external_reference("").should be_nil
       CWE.external_reference("not a reference").should be_nil

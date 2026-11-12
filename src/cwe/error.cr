@@ -6,8 +6,8 @@ module CWE
   class ParseError < Error
   end
 
-  # Raised by bang lookups (`CWE.find!`, `Weakness#parents!`, etc.) when the
-  # requested CWE id is not present in the embedded catalog.
+  # Raised by bang lookups (`CWE.find!`, `CWE.category!`, `CWE.view!`, etc.)
+  # when the requested CWE id is not present in the embedded catalog.
   class NotFoundError < Error
   end
 end
