@@ -110,7 +110,9 @@ end
 # Running text as one line, the way MITRE's own CSV export flattens the same
 # xhtml: block boundaries and `br` become a space and whitespace collapses.
 # Unlike the CSV, `sup` / `sub` keep their meaning as `^` / `_` (CWE-1241's
-# `x<sup>6</sup>` is `x^6`, not `x6`), parenthesised unless a single word.
+# `x<sup>6</sup>` is `x^6`, not `x6`), parenthesised unless a single word
+# not followed by one. Example_Code is left alone: `^` / `_` mean other things
+# in code, and no CWE 5.0 code uses either tag.
 def render_prose(node : XML::Node) : String
   io = String::Builder.new
   walk = uninitialized XML::Node -> Nil
@@ -119,7 +121,9 @@ def render_prose(node : XML::Node) : String
       if c.element? && c.name.in?("sup", "sub")
         inner = render_prose(c)
         next if inner.empty?
-        io << (c.name == "sup" ? '^' : '_') << (inner.matches?(/\A\w+\z/) ? inner : "(#{inner})")
+        # `x<sup>2</sup>y` must not read as x^(2y).
+        bare = inner.matches?(/\A\w+\z/) && !c.next_sibling.try { |n| n.text? && n.content.starts_with?(/\w/) }
+        io << (c.name == "sup" ? '^' : '_') << (bare ? inner : "(#{inner})")
       elsif c.element?
         block = c.name == "br" || c.name.in?("td", "th") || XHTML_BLOCKS.includes?(c.name)
         io << ' ' if block

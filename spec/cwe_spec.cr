@@ -854,6 +854,14 @@ describe CWE do
       ch.submission_name.should eq("PLOVER")
       ch.submissions.map { |x| {x.name, x.organization, x.date} }.should eq([{"PLOVER", nil, "2006-07-19"}])
     end
+
+    it "keeps submission_* and submissions in step through ContentHistory.from_json" do
+      flat = CWE::ContentHistory.from_json(%({"submissionName":"X","submissionDate":"2020","modificationCount":1}))
+      flat.submissions.map(&.name).should eq(["X"])
+      listed = CWE::ContentHistory.from_json(%({"submissions":[{"name":"Y"}],"submissionName":"stale","modificationCount":1}))
+      listed.submission_name.should eq("Y")
+      CWE::ContentHistory.from_json(CWE.find!(1461).content_history.to_json).submissions.size.should eq(2)
+    end
   end
 
   describe "superscripts in prose" do

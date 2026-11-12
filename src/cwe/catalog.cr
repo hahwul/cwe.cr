@@ -739,6 +739,7 @@ module CWE
       return ids.compact_map { |m| find(m) } unless resolve_categories
       found = [] of Weakness
       seen = Set(Int32).new
+      narrow_id(id).try { |i| seen << i }
       queue = Deque{ids}
       while level = queue.shift?
         level.each do |m|

@@ -599,18 +599,23 @@ module CWE
 
     getter submissions : Array(Submission) = [] of Submission
 
-    # Given only `submissions`, the `submission_*` fields come from the first;
-    # given only those fields, they become the single submission.
     def initialize(@submission_date = nil,
                    @submission_name = nil,
                    @submission_organization = nil,
                    @last_modification_date = nil,
                    @modification_count = 0,
                    @submissions = [] of Submission)
+      after_initialize
+    end
+
+    # The `submission_*` fields are always the first submission. JSON written
+    # before `submissions` existed carries only them, so they become the
+    # single submission; JSON::Serializable calls this after reading.
+    def after_initialize
       if first = @submissions.first?
-        @submission_date ||= first.date
-        @submission_name ||= first.name
-        @submission_organization ||= first.organization
+        @submission_date = first.date
+        @submission_name = first.name
+        @submission_organization = first.organization
       elsif @submission_date || @submission_name || @submission_organization
         @submissions = [Submission.new(@submission_name, @submission_organization, @submission_date)]
       end
