@@ -41,6 +41,15 @@
 
 ### Fixed
 
+- `MappingNotes.from_json(notes.to_json)` came back with `raw_usage` nil, and
+  so unequal to `notes`, for every entry in the catalog: `to_json` leaves out
+  a `rawUsage` that matches `usage`, and reading never filled it back in.
+  On read, a known `usage` without `rawUsage` now stands for that label, and
+  `to_json` always writes the raw label of an `Other` usage.
+- `Catalog.default` read its cached instance from a plain class var outside
+  the lock, so on a weakly ordered CPU (ARM64) another thread could see the
+  catalog before its fields. It is now an `Atomic` with acquire/release
+  ordering.
 - Data the CSV export lost or mangled now comes through from the XML
   (counts against CWE 4.20 / 5.0):
   - `Weakness#likelihood_of_exploit` was nil on every entry (185 / 184 set).

@@ -236,7 +236,7 @@ module CWE
         # `Other`. Emitting it in that case keeps the round-trip lossless
         # without repeating `usage` on every entry in the current catalog.
         if raw = @raw_usage
-          json.field "rawUsage", raw unless raw == @usage.to_s
+          json.field "rawUsage", raw if raw != @usage.to_s || @usage.other?
         end
         if r = @rationale
           json.field "rationale", r

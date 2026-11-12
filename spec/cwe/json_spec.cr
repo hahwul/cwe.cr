@@ -27,6 +27,24 @@ describe "CWE JSON serialization" do
         .count(&.to_json.includes?("rawUsage")).should eq(0)
     end
 
+    # Bug: since `to_json` leaves out a `rawUsage` equal to the canonical
+    # label, reading it back left `raw_usage` nil, so every catalog entry's
+    # notes came back unequal to the original.
+    it "restores the omitted raw label, so a round-trip compares equal" do
+      notes = CWE.find!(79).mapping_notes.should_not be_nil
+      restored = CWE::MappingNotes.from_json(notes.to_json)
+      restored.raw_usage.should eq("Allowed")
+      restored.should eq(notes)
+      CWE.all.compact_map(&.mapping_notes)
+        .reject { |n| CWE::MappingNotes.from_json(n.to_json) == n }.should be_empty
+      # Only reading fills it in; a hand-built value keeps what it was given.
+      CWE::MappingNotes.new(usage: CWE::MappingUsage::Discouraged).raw_usage.should be_nil
+      # An `Other` usage cannot stand for its raw label, so that is kept.
+      other = CWE::MappingNotes.new(usage: CWE::MappingUsage::Other, raw_usage: "Other")
+      CWE::MappingNotes.from_json(other.to_json).should eq(other)
+      CWE::MappingNotes.from_json(CWE::MappingNotes.new.to_json).raw_usage.should be_nil
+    end
+
     it "round-trips the reasons and suggestions lists" do
       notes = CWE.find!(20).mapping_notes.should_not be_nil
       restored = CWE::MappingNotes.from_json(notes.to_json)

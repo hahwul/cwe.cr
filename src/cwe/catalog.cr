@@ -20,20 +20,28 @@ module CWE
     # is self-contained — no I/O is required to look up any CWE entry.
     EMBEDDED_JSON = {{ read_file("#{__DIR__}/data/weaknesses.json") }}
 
-    @@default : Catalog?
+    # Atomic so the lock-free fast path below has acquire/release ordering: a
+    # plain class var let another thread (on a weakly ordered CPU such as
+    # ARM64) see the pointer before the catalog's own fields were visible.
+    @@default = Atomic(Catalog?).new(nil)
     @@default_mutex = Mutex.new
 
     # The catalog backed by the embedded MITRE data. Built on first access;
     # subsequent calls return the cached instance. Thread-safe — concurrent
     # first calls won't race on the lazy parse.
     def self.default : Catalog
-      if existing = @@default
+      if existing = @@default.get(:acquire)
         return existing
       end
       @@default_mutex.synchronize do
-        @@default ||= from_json(EMBEDDED_JSON)
+        if existing = @@default.get(:acquire)
+          existing
+        else
+          catalog = from_json(EMBEDDED_JSON)
+          @@default.set(catalog, :release)
+          catalog
+        end
       end
-      @@default.not_nil!
     end
 
     # The MITRE catalog version string, e.g. `"5.0"`, or `"unknown"` if the
