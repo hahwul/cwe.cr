@@ -4,7 +4,7 @@ module CWE
   # An informal grouping of weaknesses. MITRE marks Categories as
   # "Mapping Prohibited" — they exist for browsing/aggregation, not for
   # assigning to a CVE. Use `Catalog#category` / `CWE.category` to look one
-  # up by id. CWE 5.0 renamed them `<Grouping>`; ids and shape are unchanged.
+  # up by id. CWE 5.0 uses `<Grouping>` for these entries.
   class Category
     include Comparable(Category)
 
@@ -13,6 +13,8 @@ module CWE
     getter status : Status
     getter summary : String?
     getter members : Array(Member)
+    # Explicit `<Member_Of>` relationships declared by this entry.
+    getter member_of : Array(Member)
     getter notes : Array(Note)
     getter taxonomy_mappings : Array(TaxonomyMapping)
     getter references : Array(ReferenceLink)
@@ -27,7 +29,8 @@ module CWE
                    @references = [] of ReferenceLink,
                    @mapping_notes = nil,
                    @content_history = nil,
-                   @raw_status = nil)
+                   @raw_status = nil,
+                   @member_of = [] of Member)
     end
 
     def mapping_usage : MappingUsage
@@ -88,7 +91,11 @@ module CWE
       @[JSON::Field(key: "viewId")]
       getter view_id : Int32
 
-      def initialize(@cwe_id, @view_id)
+      @[JSON::Field(ignore_serialize: @dimensions.empty?)]
+      getter dimensions : Array(Dimension) = [] of Dimension
+      getter note : String?
+
+      def initialize(@cwe_id, @view_id, @dimensions = [] of Dimension, @note = nil)
       end
     end
   end
@@ -107,6 +114,8 @@ module CWE
     getter objective : String?
     getter filter : String?
     getter members : Array(Category::Member)
+    # Explicit `<Member_Of>` relationships declared by this view.
+    getter member_of : Array(Category::Member)
     getter audience : Array(Stakeholder)
     getter notes : Array(Note)
     getter references : Array(ReferenceLink)
@@ -122,7 +131,8 @@ module CWE
                    @references = [] of ReferenceLink,
                    @mapping_notes = nil,
                    @content_history = nil,
-                   @raw_status = nil)
+                   @raw_status = nil,
+                   @member_of = [] of Category::Member)
     end
 
     def mapping_usage : MappingUsage

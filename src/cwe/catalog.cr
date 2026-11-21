@@ -47,6 +47,8 @@ module CWE
     # The MITRE catalog version string, e.g. `"5.0"`, or `"unknown"` if the
     # source document did not carry one.
     getter catalog_version : String
+    getter catalog_name : String?
+    getter catalog_date : String?
     # ISO-8601 UTC timestamp at which the embedded blob was generated.
     getter generated_at : String
 
@@ -67,7 +69,8 @@ module CWE
                    weaknesses : Array(Weakness),
                    categories : Array(Category) = [] of Category,
                    views : Array(View) = [] of View,
-                   external_references : Array(ExternalReference) = [] of ExternalReference)
+                   external_references : Array(ExternalReference) = [] of ExternalReference,
+                   @catalog_name = nil, @catalog_date = nil)
       # Each sorted list is derived from its id map rather than from the
       # input array, so a document that repeats an id cannot leave the two
       # disagreeing: `size`/`all`/`each` and `find` always see the same set,
@@ -135,7 +138,8 @@ module CWE
       cats = entry_array(doc, "categories").map { |c| category_from_json(c) }
       vws = entry_array(doc, "views").map { |v| view_from_json(v) }
       ers = entry_array(doc, "external_references").map { |r| external_reference_from_json(r) }
-      new(version, generated, ws, cats, vws, ers)
+      new(version, generated, ws, cats, vws, ers,
+        catalog_name: s(doc, "catalog_name"), catalog_date: s(doc, "catalog_date"))
     end
 
     # ---------- Defensive JSON access ----------
@@ -224,6 +228,11 @@ module CWE
         publisher: s(j, "publisher"),
         url: s(j, "url"),
         url_date: s(j, "url_date"),
+        alt_url: s(j, "alt_url"),
+        alt_url_date: s(j, "alt_url_date"),
+        media_types: strings(j, "media_types"),
+        access_restrictions: s(j, "access_restrictions"),
+        rationales: strings(j, "rationales"),
       )
     end
 
@@ -236,7 +245,8 @@ module CWE
         name: raw_s(j, "name") || "",
         status: Status.parse_label(status_raw),
         summary: s(j, "summary"),
-        members: parse_members(j),
+        members: parse_members(j, "members"),
+        member_of: parse_members(j, "member_of"),
         notes: objects(j, "notes").map { |x| parse_note(x) },
         taxonomy_mappings: objects(j, "taxonomy_mappings").map { |x| parse_taxonomy(x) },
         references: objects(j, "references").map { |x| parse_reference_link(x) },
@@ -257,7 +267,8 @@ module CWE
         status: Status.parse_label(status_raw),
         objective: s(j, "objective"),
         filter: s(j, "filter"),
-        members: parse_members(j),
+        members: parse_members(j, "members"),
+        member_of: parse_members(j, "member_of"),
         audience: objects(j, "audience").map { |x| parse_stakeholder(x) },
         notes: objects(j, "notes").map { |x| parse_note(x) },
         references: objects(j, "references").map { |x| parse_reference_link(x) },
@@ -308,11 +319,38 @@ module CWE
         last_modification_date: s(j, "last_modification_date"),
         modification_count: i32(j, "modification_count") || 0,
         submissions: objects(j, "submissions").map { |x| parse_submission(x) },
+        contributions: objects(j, "contributions").map { |x| parse_contribution(x) },
+        modifications: objects(j, "modifications").map { |x| parse_modification(x) },
+        previous_entry_names: objects(j, "previous_entry_names").compact_map do |x|
+          if name = s(x, "name")
+            PreviousEntryName.new(name, s(x, "date"), s(x, "version"))
+          end
+        end,
       )
     end
 
     private def self.parse_submission(j : ::JSON::Any) : Submission
-      Submission.new(name: s(j, "name"), organization: s(j, "organization"), date: s(j, "date"))
+      Submission.new(
+        name: s(j, "name"), names: strings(j, "names"), organization: s(j, "organization"),
+        date: s(j, "date"), comment: s(j, "comment"), version: s(j, "version"),
+        release_date: s(j, "release_date"),
+      )
+    end
+
+    private def self.parse_contribution(j : ::JSON::Any) : Contribution
+      Contribution.new(
+        type: s(j, "type"), names: strings(j, "names"), organization: s(j, "organization"),
+        date: s(j, "date"), comment: s(j, "comment"), version: s(j, "version"),
+        release_date: s(j, "release_date"),
+      )
+    end
+
+    private def self.parse_modification(j : ::JSON::Any) : Modification
+      Modification.new(
+        name: s(j, "name"), organization: s(j, "organization"), date: s(j, "date"),
+        comment: s(j, "comment"), version: s(j, "version"), release_date: s(j, "release_date"),
+        importance: s(j, "importance"),
+      )
     end
 
     private def self.parse_demonstrative_example(j : ::JSON::Any) : DemonstrativeExample
@@ -321,7 +359,22 @@ module CWE
         body_text: strings(j, "body_text"),
         example_code: objects(j, "example_code").map { |c| parse_example_code(c) },
         reference_ids: strings(j, "reference_ids"),
+        example_id: s(j, "example_id"),
+        title_text: s(j, "title_text"),
+        references: objects(j, "references").map { |x| parse_reference_link(x) },
+        entries: parse_example_entries(j),
       )
+    end
+
+    private def self.parse_example_entries(j : ::JSON::Any) : Array(String | ExampleCode)
+      rows = field(j, "entries").try(&.as_a?) || return [] of String | ExampleCode
+      rows.compact_map do |row|
+        if row.as_h?
+          parse_example_code(row)
+        else
+          row.as_s?.presence
+        end
+      end
     end
 
     private def self.parse_example_code(j : ::JSON::Any) : ExampleCode
@@ -332,11 +385,13 @@ module CWE
       )
     end
 
-    private def self.parse_members(j : ::JSON::Any) : Array(Category::Member)
-      objects(j, "members").map do |m|
+    private def self.parse_members(j : ::JSON::Any, key : String) : Array(Category::Member)
+      objects(j, key).map do |m|
         Category::Member.new(
           cwe_id: i32(m, "cwe_id") || 0,
           view_id: i32(m, "view_id") || 0,
+          dimensions: parse_dimensions(m),
+          note: s(m, "note"),
         )
       end
     end
@@ -358,6 +413,8 @@ module CWE
         description: raw_s(j, "description"),
         extended_description: raw_s(j, "extended_description"),
         technical_nuance: raw_s(j, "technical_nuance"),
+        dimensions: parse_dimensions(j),
+        diagram: s(j, "diagram"),
         likelihood_of_exploit: raw_s(j, "likelihood_of_exploit"),
         related_weaknesses: objects(j, "related_weaknesses").map { |x| parse_related(x) },
         ordinalities: objects(j, "ordinalities").map { |x| parse_ordinality(x) },
@@ -392,7 +449,25 @@ module CWE
         view_id: i32(x, "view_id") || 0,
         ordinal: s(x, "ordinal"),
         chain_id: s(x, "chain_id"),
+        dimensions: parse_dimensions(x),
+        note: s(x, "note"),
       )
+    end
+
+    private def self.parse_dimensions(j : ::JSON::Any) : Array(Dimension)
+      objects(j, "dimensions").compact_map do |x|
+        type = s(x, "type") || next
+        value = s(x, "value") || next
+        Dimension.new(type, value)
+      end
+    end
+
+    private def self.parse_custom_phases(j : ::JSON::Any) : Array(CustomPhase)
+      objects(j, "custom_phases").compact_map do |x|
+        domain = s(x, "domain") || next
+        value = s(x, "value") || next
+        CustomPhase.new(domain, value)
+      end
     end
 
     private def self.parse_ordinality(x : ::JSON::Any) : Ordinality
@@ -424,6 +499,8 @@ module CWE
         class_label: s(x, "#{prefix}_class"),
         prevalence: s(x, "#{prefix}_prevalence"),
         version: s(x, "#{prefix}_version"),
+        note: s(x, "note"),
+        cpe_id: s(x, "#{prefix}_cpe_id"),
       )
     end
 
@@ -431,6 +508,7 @@ module CWE
       AlternateTerm.new(
         term: raw_s(x, "term") || "",
         description: s(x, "description"),
+        roles: strings(x, "roles"),
       )
     end
 
@@ -441,6 +519,7 @@ module CWE
         phase: raw_s(x, "phase") || "",
         note: s(x, "note"),
         phases: strings(x, "phases"),
+        custom_phases: parse_custom_phases(x),
       )
     end
 
@@ -456,6 +535,7 @@ module CWE
         note: s(x, "note"),
         scopes: scopes,
         impacts: impacts,
+        consequence_id: s(x, "consequence_id"),
       )
     end
 
@@ -467,6 +547,7 @@ module CWE
         effectiveness: s(x, "effectiveness"),
         effectiveness_notes: s(x, "effectiveness_notes"),
         phases: strings(x, "phases"),
+        custom_phases: parse_custom_phases(x),
       )
     end
 
@@ -475,6 +556,7 @@ module CWE
         mitigation_id: s(x, "mitigation_id"),
         phase: s(x, "phase"),
         phases: strings(x, "phases"),
+        custom_phases: parse_custom_phases(x),
         strategy: s(x, "strategy"),
         description: s(x, "description"),
         effectiveness: s(x, "effectiveness"),
@@ -487,6 +569,7 @@ module CWE
         reference: raw_s(x, "reference") || "",
         description: s(x, "description"),
         link: s(x, "link"),
+        rationales: strings(x, "rationales"),
       )
     end
 
@@ -503,6 +586,8 @@ module CWE
       Note.new(
         type: s(x, "type"),
         note: s(x, "note"),
+        version: s(x, "version"),
+        release_date: s(x, "release_date"),
       )
     end
 

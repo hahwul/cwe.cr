@@ -36,6 +36,12 @@ module CWE
         if l = @likelihood_of_exploit
           json.field "likelihoodOfExploit", l
         end
+        unless @dimensions.empty?
+          json.field "dimensions", @dimensions
+        end
+        if diagram = @diagram
+          json.field "diagram", diagram
+        end
 
         unless @related_weaknesses.empty?
           json.field "relatedWeaknesses" do
@@ -153,6 +159,9 @@ module CWE
             json.array { @members.each(&.to_json(json)) }
           end
         end
+        unless @member_of.empty?
+          json.field "memberOf", @member_of
+        end
         unless @notes.empty?
           json.field "notes" do
             json.array { @notes.each(&.to_json(json)) }
@@ -199,6 +208,9 @@ module CWE
           json.field "members" do
             json.array { @members.each(&.to_json(json)) }
           end
+        end
+        unless @member_of.empty?
+          json.field "memberOf", @member_of
         end
         unless @audience.empty?
           json.field "audience" do

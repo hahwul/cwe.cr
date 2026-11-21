@@ -198,6 +198,28 @@ module CWE
     end
   end
 
+  # A dimension of a weakness or a difference described by a relationship.
+  struct Dimension
+    include JSON::Serializable
+
+    getter type : String
+    getter value : String
+
+    def initialize(@type, @value)
+    end
+  end
+
+  # A lifecycle phase specific to a domain such as AI or Hardware.
+  struct CustomPhase
+    include JSON::Serializable
+
+    getter domain : String
+    getter value : String
+
+    def initialize(@domain, @value)
+    end
+  end
+
   # A directed edge in the CWE hierarchy.
   #
   # `nature` is the relationship label as defined by the catalog
@@ -221,7 +243,12 @@ module CWE
     @[JSON::Field(key: "chainId")]
     getter chain_id : String?
 
-    def initialize(@nature, @cwe_id, @view_id, @ordinal = nil, @chain_id = nil)
+    @[JSON::Field(ignore_serialize: @dimensions.empty?)]
+    getter dimensions : Array(Dimension) = [] of Dimension
+    getter note : String?
+
+    def initialize(@nature, @cwe_id, @view_id, @ordinal = nil, @chain_id = nil,
+                   @dimensions = [] of Dimension, @note = nil)
     end
 
     def primary? : Bool
@@ -241,8 +268,11 @@ module CWE
     getter scopes : Array(String) = [] of String
     getter impacts : Array(String) = [] of String
 
+    @[JSON::Field(key: "consequenceId")]
+    getter consequence_id : String?
+
     def initialize(@scope, @impact = nil, @likelihood = nil, @note = nil,
-                   @scopes = [] of String, @impacts = [] of String)
+                   @scopes = [] of String, @impacts = [] of String, @consequence_id = nil)
       after_initialize
     end
 
@@ -277,9 +307,12 @@ module CWE
     # `"Implementation Architecture and Design"`.)
     getter phases : Array(String) = [] of String
 
+    @[JSON::Field(key: "customPhases", ignore_serialize: @custom_phases.empty?)]
+    getter custom_phases : Array(CustomPhase) = [] of CustomPhase
+
     def initialize(@mitigation_id = nil, @phase = nil, @strategy = nil,
                    @description = nil, @effectiveness = nil, @effectiveness_notes = nil,
-                   @phases = [] of String)
+                   @phases = [] of String, @custom_phases = [] of CustomPhase)
       after_initialize
     end
 
@@ -290,6 +323,7 @@ module CWE
       if @phases.empty? && (p = @phase)
         @phases = [p]
       end
+      @phases = @custom_phases.map(&.value) if @phases.empty?
       @phase = @phases.first?
     end
   end
@@ -312,9 +346,17 @@ module CWE
     # detection methods.
     getter phases : Array(String) = [] of String
 
+    @[JSON::Field(key: "customPhases", ignore_serialize: @custom_phases.empty?)]
+    getter custom_phases : Array(CustomPhase) = [] of CustomPhase
+
     def initialize(@method, @method_id = nil, @description = nil,
                    @effectiveness = nil, @effectiveness_notes = nil,
-                   @phases = [] of String)
+                   @phases = [] of String, @custom_phases = [] of CustomPhase)
+      after_initialize
+    end
+
+    def after_initialize
+      @phases = @custom_phases.map(&.value) if @phases.empty?
     end
   end
 
@@ -325,7 +367,10 @@ module CWE
     getter description : String?
     getter link : String?
 
-    def initialize(@reference, @description = nil, @link = nil)
+    @[JSON::Field(ignore_serialize: @rationales.empty?)]
+    getter rationales : Array(String) = [] of String
+
+    def initialize(@reference, @description = nil, @link = nil, @rationales = [] of String)
     end
   end
 
@@ -335,7 +380,10 @@ module CWE
     getter term : String
     getter description : String?
 
-    def initialize(@term, @description = nil)
+    @[JSON::Field(ignore_serialize: @roles.empty?)]
+    getter roles : Array(String) = [] of String
+
+    def initialize(@term, @description = nil, @roles = [] of String)
     end
   end
 
@@ -348,13 +396,18 @@ module CWE
     getter note : String?
     getter phases : Array(String) = [] of String
 
-    def initialize(@phase = "", @note = nil, @phases = [] of String)
+    @[JSON::Field(key: "customPhases", ignore_serialize: @custom_phases.empty?)]
+    getter custom_phases : Array(CustomPhase) = [] of CustomPhase
+
+    def initialize(@phase = "", @note = nil, @phases = [] of String,
+                   @custom_phases = [] of CustomPhase)
       after_initialize
     end
 
     # See `Mitigation#after_initialize`.
     def after_initialize
       @phases = [@phase] if @phases.empty? && !@phase.empty?
+      @phases = @custom_phases.map(&.value) if @phases.empty?
       @phase = @phases.first? || ""
     end
   end
@@ -373,8 +426,13 @@ module CWE
 
     getter prevalence : String?
     getter version : String?
+    getter note : String?
 
-    def initialize(@kind, @name = nil, @class_label = nil, @prevalence = nil, @version = nil)
+    @[JSON::Field(key: "cpeId")]
+    getter cpe_id : String?
+
+    def initialize(@kind, @name = nil, @class_label = nil, @prevalence = nil, @version = nil,
+                   @note = nil, @cpe_id = nil)
     end
   end
 
@@ -412,8 +470,12 @@ module CWE
 
     getter type : String?
     getter note : String?
+    getter version : String?
 
-    def initialize(@type = nil, @note = nil)
+    @[JSON::Field(key: "releaseDate")]
+    getter release_date : String?
+
+    def initialize(@type = nil, @note = nil, @version = nil, @release_date = nil)
     end
   end
 
@@ -424,22 +486,53 @@ module CWE
   struct DemonstrativeExample
     include JSON::Serializable
 
+    @[JSON::Field(key: "exampleId")]
+    getter example_id : String?
+
+    @[JSON::Field(key: "titleText")]
+    getter title_text : String?
+
     @[JSON::Field(key: "introText")]
     getter intro_text : String?
 
     @[JSON::Field(key: "bodyText")]
-    getter body_text : Array(String)
+    getter body_text : Array(String) = [] of String
 
     @[JSON::Field(key: "exampleCode")]
-    getter example_code : Array(ExampleCode)
+    getter example_code : Array(ExampleCode) = [] of ExampleCode
 
     @[JSON::Field(key: "referenceIds")]
-    getter reference_ids : Array(String)
+    getter reference_ids : Array(String) = [] of String
+
+    @[JSON::Field(ignore_serialize: @references.empty?)]
+    getter references : Array(ReferenceLink) = [] of ReferenceLink
+
+    # Body text and code blocks in XML order. Legacy JSON with separate arrays
+    # does not contain the original ordering.
+    @[JSON::Field(ignore_serialize: @entries.empty?)]
+    getter entries : Array(String | ExampleCode) = [] of String | ExampleCode
 
     def initialize(@intro_text = nil,
                    @body_text = [] of String,
                    @example_code = [] of ExampleCode,
-                   @reference_ids = [] of String)
+                   @reference_ids = [] of String,
+                   @example_id = nil,
+                   @title_text = nil,
+                   @references = [] of ReferenceLink,
+                   @entries = [] of String | ExampleCode)
+      after_initialize
+    end
+
+    def after_initialize
+      unless @entries.empty?
+        @body_text = @entries.compact_map(&.as?(String))
+        @example_code = @entries.compact_map(&.as?(ExampleCode))
+      end
+      if @references.empty?
+        @references = @reference_ids.map { |id| ReferenceLink.new(id) }
+      else
+        @reference_ids = @references.map(&.external_reference_id)
+      end
     end
   end
 
@@ -498,6 +591,21 @@ module CWE
     @[JSON::Field(key: "urlDate")]
     getter url_date : String?
 
+    @[JSON::Field(key: "altUrl")]
+    getter alt_url : String?
+
+    @[JSON::Field(key: "altUrlDate")]
+    getter alt_url_date : String?
+
+    @[JSON::Field(key: "mediaTypes", ignore_serialize: @media_types.empty?)]
+    getter media_types : Array(String) = [] of String
+
+    @[JSON::Field(key: "accessRestrictions")]
+    getter access_restrictions : String?
+
+    @[JSON::Field(ignore_serialize: @rationales.empty?)]
+    getter rationales : Array(String) = [] of String
+
     def initialize(@reference_id,
                    @authors = [] of String,
                    @title = nil,
@@ -508,7 +616,12 @@ module CWE
                    @publication_day = nil,
                    @publisher = nil,
                    @url = nil,
-                   @url_date = nil)
+                   @url_date = nil,
+                   @alt_url = nil,
+                   @alt_url_date = nil,
+                   @media_types = [] of String,
+                   @access_restrictions = nil,
+                   @rationales = [] of String)
     end
   end
 
@@ -574,18 +687,76 @@ module CWE
     getter name : String?
     getter organization : String?
     getter date : String?
+    getter names : Array(String) = [] of String
+    getter comment : String?
+    getter version : String?
 
-    def initialize(@name = nil, @organization = nil, @date = nil)
+    @[JSON::Field(key: "releaseDate")]
+    getter release_date : String?
+
+    def initialize(@name = nil, @organization = nil, @date = nil,
+                   @names = [] of String, @comment = nil, @version = nil, @release_date = nil)
+      after_initialize
+    end
+
+    def after_initialize
+      if first = @names.first?
+        @name = first
+      elsif name = @name
+        @names = [name]
+      end
     end
   end
 
-  # Compact view of an entry's revision history. The full XML record
-  # contains a verbose list of modifications; we expose only the most
-  # commonly queried fields (submissions, latest modification).
-  #
-  # The schema allows several `<Submission>`s (CWE-1461 has two
-  # co-submitters): `submissions` lists them all, and the `submission_*`
-  # getters are the first one.
+  struct Contribution
+    include JSON::Serializable
+
+    getter type : String?
+    getter names : Array(String) = [] of String
+    getter organization : String?
+    getter date : String?
+    getter comment : String?
+    getter version : String?
+
+    @[JSON::Field(key: "releaseDate")]
+    getter release_date : String?
+
+    def initialize(@type = nil, @names = [] of String, @organization = nil,
+                   @date = nil, @comment = nil, @version = nil, @release_date = nil)
+    end
+  end
+
+  struct Modification
+    include JSON::Serializable
+
+    getter name : String?
+    getter organization : String?
+    getter date : String?
+    getter comment : String?
+    getter version : String?
+    getter importance : String?
+
+    @[JSON::Field(key: "releaseDate")]
+    getter release_date : String?
+
+    def initialize(@name = nil, @organization = nil, @date = nil, @comment = nil,
+                   @version = nil, @release_date = nil, @importance = nil)
+    end
+  end
+
+  struct PreviousEntryName
+    include JSON::Serializable
+
+    getter name : String
+    getter date : String?
+    getter version : String?
+
+    def initialize(@name, @date = nil, @version = nil)
+    end
+  end
+
+  # Entry history. Summary accessors also support catalogs built before
+  # detailed history was included.
   struct ContentHistory
     include JSON::Serializable
 
@@ -602,16 +773,24 @@ module CWE
     getter last_modification_date : String?
 
     @[JSON::Field(key: "modificationCount")]
-    getter modification_count : Int32
+    getter modification_count : Int32 = 0
 
     getter submissions : Array(Submission) = [] of Submission
+    getter contributions : Array(Contribution) = [] of Contribution
+    getter modifications : Array(Modification) = [] of Modification
+
+    @[JSON::Field(key: "previousEntryNames")]
+    getter previous_entry_names : Array(PreviousEntryName) = [] of PreviousEntryName
 
     def initialize(@submission_date = nil,
                    @submission_name = nil,
                    @submission_organization = nil,
                    @last_modification_date = nil,
                    @modification_count = 0,
-                   @submissions = [] of Submission)
+                   @submissions = [] of Submission,
+                   @contributions = [] of Contribution,
+                   @modifications = [] of Modification,
+                   @previous_entry_names = [] of PreviousEntryName)
       after_initialize
     end
 
@@ -625,6 +804,10 @@ module CWE
         @submission_organization = first.organization
       elsif @submission_date || @submission_name || @submission_organization
         @submissions = [Submission.new(@submission_name, @submission_organization, @submission_date)]
+      end
+      if last = @modifications.last?
+        @modification_count = @modifications.size
+        @last_modification_date = last.date
       end
     end
   end
