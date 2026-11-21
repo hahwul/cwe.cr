@@ -31,7 +31,7 @@ module CWE
     getter dimensions : Array(Dimension)
     getter diagram : String?
 
-    getter related_weaknesses : Array(Related)
+    @related_weaknesses : Array(Related)
     getter ordinalities : Array(Ordinality)
     getter applicable_platforms : Array(ApplicablePlatform)
     getter alternate_terms : Array(AlternateTerm)
@@ -95,6 +95,12 @@ module CWE
       @dimensions : Array(Dimension) = [] of Dimension,
       @diagram : String? = nil,
     )
+      @related_weaknesses = @related_weaknesses.dup
+    end
+
+    # Return a copy so callers cannot invalidate the catalog's relationship index.
+    def related_weaknesses : Array(Related)
+      @related_weaknesses.dup
     end
 
     # Canonical identifier with the `CWE-` prefix, e.g. `"CWE-79"`.

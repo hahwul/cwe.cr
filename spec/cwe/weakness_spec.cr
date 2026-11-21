@@ -183,6 +183,13 @@ describe CWE::Weakness do
       legacy.impacts.should eq(["Modify Memory"])
     end
 
+    it "derives the single values from the first listed scope and impact in public JSON" do
+      result = CWE::Consequence.from_json(%({"scope":"Confidentiality","scopes":["Integrity"],"impacts":["Modify Memory"]}))
+      result.scope.should eq("Integrity")
+      result.impact.should eq("Modify Memory")
+      CWE::Consequence.from_json(%({"scopes":["Availability"]})).scope.should eq("Availability")
+    end
+
     # Bug: a value containing `::` was split as if it were the entry
     # separator, leaving a truncated entry plus a bogus one.
     it "keeps a value that contains the entry separator" do

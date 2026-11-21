@@ -2,6 +2,68 @@ require "../spec_helper"
 require "../../data/catalog_xml"
 
 describe "CWE XML schema" do
+  it "evaluates implicit filters against a prefixed catalog without changing XPath syntax" do
+    xml = <<-XML
+      <c:Weakness_Catalog xmlns:c="http://cwe.mitre.org/cwe-8" Version="5.0">
+        <c:Weaknesses>
+          <c:Weakness ID="1" Name="A or B" Status="Draft"/>
+          <c:Weakness ID="2" Name="Second" Status="Deprecated"/>
+        </c:Weaknesses>
+        <c:Views>
+          <c:View ID="3" Name="Filtered" Type="Implicit">
+            <c:Filter>/Weakness_Catalog/*[not(self::External_References)]/c:Weakness[attribute::Name='A or B' or @Status='Deprecated']</c:Filter>
+          </c:View>
+        </c:Views>
+      </c:Weakness_Catalog>
+      XML
+    catalog = CWE::Catalog.from_json(CWE::CatalogXML.parse(xml).to_json)
+    catalog.members_of(3).map(&.id).should eq([1, 2])
+  end
+
+  it "preserves image-only prose and preformatted example code" do
+    xml = <<-XML
+      <Weakness_Catalog xmlns="http://cwe.mitre.org/cwe-8" xmlns:xhtml="http://www.w3.org/1999/xhtml" Version="5.0">
+        <Weaknesses><Weakness ID="1"><Demonstrative_Examples><Demonstrative_Example>
+          <Body_Text><xhtml:img alt="Diagram" src="/example.png"/></Body_Text>
+          <Example_Code Nature="Informative"><xhtml:pre>def label():
+          return 1</xhtml:pre></Example_Code>
+        </Demonstrative_Example></Demonstrative_Examples></Weakness></Weaknesses>
+      </Weakness_Catalog>
+      XML
+    catalog = CWE::Catalog.from_json(CWE::CatalogXML.parse(xml).to_json)
+    example = catalog.find!(1).demonstrative_examples.first
+    example.entries.first.should eq("Diagram (/example.png)")
+    example.example_code.first.code.should eq("def label():\n    return 1")
+    CWE.find!(1476).demonstrative_examples.first.entries.size.should eq(15)
+  end
+
+  it "retains the position and domain of a custom phase with the same name as a standard phase" do
+    xml = <<-XML
+      <Weakness_Catalog xmlns="http://cwe.mitre.org/cwe-8" Version="5.0">
+        <Weaknesses><Weakness ID="1"><Potential_Mitigations>
+          <Mitigation><Phase>Testing</Phase><Custom_Phase Domain="AI">Testing</Custom_Phase></Mitigation>
+          <Mitigation><Custom_Phase Domain="AI">Testing</Custom_Phase><Phase>Testing</Phase></Mitigation>
+        </Potential_Mitigations></Weakness></Weaknesses>
+      </Weakness_Catalog>
+      XML
+    catalog = CWE::Catalog.from_json(CWE::CatalogXML.parse(xml).to_json)
+    first, second = catalog.find!(1).potential_mitigations
+    custom = CWE::CustomPhase.new("AI", "Testing")
+    first.phase_entries.should eq(["Testing", custom])
+    second.phase_entries.should eq([custom, "Testing"])
+    first.phases.should eq(["Testing", "Testing"])
+    CWE::Mitigation.from_json(second.to_json).phase_entries.should eq(second.phase_entries)
+  end
+
+  it "rejects invalid and duplicate entry IDs before generating a catalog" do
+    expect_raises(ArgumentError, /invalid ID/) do
+      CWE::CatalogXML.parse(%(<Weakness_Catalog><Weaknesses><Weakness ID="1"/><Weakness ID="typo"/></Weaknesses></Weakness_Catalog>))
+    end
+    expect_raises(ArgumentError, /duplicate weakness ID 1/) do
+      CWE::CatalogXML.parse(%(<Weakness_Catalog><Weaknesses><Weakness ID="1"/><Weakness ID="1"/></Weaknesses></Weakness_Catalog>))
+    end
+  end
+
   it "round-trips structured metadata from schema 8.0 through the catalog" do
     xml = <<-XML
       <Weakness_Catalog xmlns="http://cwe.mitre.org/cwe-8" Name="CWE" Version="5.0" Date="2026-10-28">
