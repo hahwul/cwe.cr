@@ -40,6 +40,11 @@ module CWE::CatalogXML
           name = c.name
           if name == "br"
             end_line(true)
+          elsif name == "pre"
+            end_line(false)
+            c.content.lines.each do |line|
+              @lines << (line.empty? ? "" : INDENT * @depth + line)
+            end
           elsif XHTML_BLOCKS.includes?(name)
             indented = name == "div" && c["style"]?.try(&.includes?("margin-left"))
             end_line(false)
@@ -93,6 +98,15 @@ module CWE::CatalogXML
           # `x<sup>2</sup>y` must not read as x^(2y).
           bare = inner.matches?(/\A\w+\z/) && !c.next_sibling.try { |n| n.text? && n.content.starts_with?(/\w/) }
           io << (c.name == "sup" ? '^' : '_') << (bare ? inner : "(#{inner})")
+        elsif c.element? && c.name == "img"
+          alt = c["alt"]?.presence
+          src = c["src"]?.presence
+          io << ' '
+          io << alt if alt
+          if src
+            alt ? (io << " (" << src << ')') : (io << src)
+          end
+          io << ' '
         elsif c.element?
           block = c.name == "br" || c.name.in?("td", "th") || XHTML_BLOCKS.includes?(c.name)
           io << ' ' if block
@@ -149,10 +163,8 @@ module CWE::CatalogXML
     if suggestions_node = child_named(node, "Suggestions")
       ss = [] of JSON::Any
       children_named(suggestions_node, "Suggestion").each do |s|
-        cid = s["CWE_ID"]?.try(&.to_i64?)
-        next unless cid
         inner = {} of String => JSON::Any
-        inner["cwe_id"] = JSON::Any.new(cid)
+        inner["cwe_id"] = JSON::Any.new(required_id(s, "CWE_ID").to_i64)
         if c = s["Comment"]?
           inner["comment"] = JSON::Any.new(c)
         end
@@ -198,7 +210,8 @@ module CWE::CatalogXML
   def parse_references(node : XML::Node) : Array(JSON::Any)
     arr = [] of JSON::Any
     children_named(node, "Reference").each do |r|
-      next unless rid = r["External_Reference_ID"]?
+      rid = r["External_Reference_ID"]?.try(&.strip.presence) ||
+            raise ArgumentError.new("missing External_Reference_ID on <Reference>")
       inner = {} of String => JSON::Any
       inner["external_reference_id"] = JSON::Any.new(rid)
       if sec = r["Section"]?
@@ -319,6 +332,7 @@ module CWE::CatalogXML
 
   def put_phases(h : Hash(String, JSON::Any), node : XML::Node) : Nil
     phases = [] of JSON::Any
+    entries = [] of JSON::Any
     custom = [] of JSON::Any
     node.children.each do |child|
       next unless child.element? && child.name.in?("Phase", "Custom_Phase")
@@ -326,11 +340,16 @@ module CWE::CatalogXML
       next if value.empty?
       phases << str(value)
       if child.name == "Custom_Phase" && (domain = child["Domain"]?)
-        custom << JSON::Any.new({"domain" => str(domain), "value" => str(value)})
+        entry = JSON::Any.new({"domain" => str(domain), "value" => str(value)})
+        custom << entry
+        entries << entry
+      else
+        entries << str(value)
       end
     end
     put_list(h, "phases", phases)
     put_list(h, "custom_phases", custom)
+    put_list(h, "phase_entries", entries) unless custom.empty?
   end
 
   def parse_dimensions(node : XML::Node) : Array(JSON::Any)
@@ -391,8 +410,8 @@ module CWE::CatalogXML
         rows = children_named(child, "Related_Weakness").map do |r|
           inner = {} of String => JSON::Any
           inner["nature"] = str(r["Nature"]? || "")
-          inner["cwe_id"] = JSON::Any.new(r["CWE_ID"]?.try(&.to_i64?) || 0_i64)
-          inner["view_id"] = JSON::Any.new(r["View_ID"]?.try(&.to_i64?) || 0_i64)
+          inner["cwe_id"] = JSON::Any.new(required_id(r, "CWE_ID").to_i64)
+          inner["view_id"] = JSON::Any.new(required_id(r, "View_ID").to_i64)
           put(inner, "ordinal", r["Ordinal"]?)
           put(inner, "chain_id", r["Chain_ID"]?)
           put_relationship_metadata(inner, r)
@@ -490,9 +509,9 @@ module CWE::CatalogXML
   end
 
   def collect_members(parent : XML::Node, element : String) : Array(JSON::Any)
-    children_named(parent, element).compact_map do |m|
-      cid = m["CWE_ID"]?.try(&.to_i64?) || next
-      vid = m["View_ID"]?.try(&.to_i64?) || 0_i64
+    children_named(parent, element).map do |m|
+      cid = required_id(m, "CWE_ID").to_i64
+      vid = required_id(m, "View_ID").to_i64
       fields = {"cwe_id" => JSON::Any.new(cid), "view_id" => JSON::Any.new(vid)}
       put_relationship_metadata(fields, m)
       JSON::Any.new(fields)
@@ -578,6 +597,36 @@ module CWE::CatalogXML
     entry
   end
 
+  private def required_id(node : XML::Node, attr : String = "ID") : Int32
+    value = node[attr]?
+    id = value.try(&.to_i?)
+    raise ArgumentError.new("invalid #{attr} #{value.inspect} on <#{node.name}>") unless id && id > 0
+    id
+  end
+
+  XPATH_TOKENS = /
+    "[^"]*" | '[^']*' |
+    (?:[@$]\s*)?[a-zA-Z_][\w.-]*(?::[a-zA-Z_][\w.-]*)?
+  /x
+
+  # MITRE publishes namespace-free XPath expressions for implicit views.
+  private def implicit_member_ids(root : XML::Node, filter : String) : Array(JSON::Any)
+    namespaces = root.namespaces.reject { |prefix, _| prefix.empty? }
+    if uri = root.namespace.try(&.href)
+      namespaces["cwe_catalog"] = uri
+      filter = filter.gsub(XPATH_TOKENS) do |token, match|
+        next token if token[0].in?('"', '\'', '@', '$') || token.includes?(':') || token.in?("and", "or", "div", "mod")
+        next token if filter[0...match.begin(0)].matches?(/\b(?:attribute|namespace)\s*::\s*\z/)
+        suffix = filter[match.end(0)..].lstrip
+        suffix.starts_with?('(') || suffix.starts_with?("::") ? token : "cwe_catalog:#{token}"
+      end
+    end
+    root.xpath_nodes(filter, namespaces).compact_map do |node|
+      id = node["ID"]?.try(&.to_i64?) if node.element? && node.name.in?("Weakness", "Category", "Grouping", "View")
+      JSON::Any.new(id) if id
+    end
+  end
+
   def parse(input : String | IO, version_override : String? = nil) : Hash(String, JSON::Any)
     doc = XML.parse(input)
     # libxml2 recovers from a truncated or broken file and hands back whatever it
@@ -592,6 +641,8 @@ module CWE::CatalogXML
     categories = [] of Hash(String, JSON::Any)
     views = [] of Hash(String, JSON::Any)
     external_refs = [] of Hash(String, JSON::Any)
+    entry_ids = Set(Tuple(String, Int32)).new
+    reference_ids = Set(String).new
 
     # The XML uses a versioned default namespace (`http://cwe.mitre.org/cwe-7`,
     # `…/cwe-8`); `XML::Node#name` is the local name, so navigation ignores it.
@@ -601,16 +652,28 @@ module CWE::CatalogXML
         next unless node.element?
         case {group.name, node.name}
         when {"Weaknesses", "Weakness"}
-          id = node["ID"]?.try(&.to_i?) || next
+          id = required_id(node)
+          raise ArgumentError.new("duplicate weakness ID #{id}") unless entry_ids.add?({"Weakness", id})
           weaknesses << parse_weakness(node, id)
         when {"Categories", "Category"}, {"Groupings", "Grouping"}
-          id = node["ID"]?.try(&.to_i?) || next
+          id = required_id(node)
+          raise ArgumentError.new("duplicate grouping ID #{id}") unless entry_ids.add?({"Grouping", id})
           categories << parse_category(node, id)
         when {"Views", "View"}
-          id = node["ID"]?.try(&.to_i?) || next
-          views << parse_view(node, id)
+          id = required_id(node)
+          raise ArgumentError.new("duplicate view ID #{id}") unless entry_ids.add?({"View", id})
+          view = parse_view(node, id)
+          if view["type"]?.try(&.as_s?) == "Implicit" && (filter = view["filter"]?.try(&.as_s?))
+            begin
+              put_list(view, "implicit_member_ids", implicit_member_ids(root, filter))
+            rescue ex : XML::Error | TypeCastError
+              raise ArgumentError.new("invalid filter on view #{id}: #{ex.message}")
+            end
+          end
+          views << view
         when {"External_References", "External_Reference"}
-          rid = node["Reference_ID"]? || next
+          rid = node["Reference_ID"]?.try(&.strip.presence) || raise ArgumentError.new("missing Reference_ID on <External_Reference>")
+          raise ArgumentError.new("duplicate Reference_ID #{rid}") unless reference_ids.add?(rid)
           external_refs << parse_external_reference(node, rid)
         end
       end

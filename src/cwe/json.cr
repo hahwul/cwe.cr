@@ -204,6 +204,9 @@ module CWE
         if f = @filter
           json.field "filter", f
         end
+        unless @implicit_member_ids.empty?
+          json.field "implicitMemberIds", @implicit_member_ids
+        end
         unless @members.empty?
           json.field "members" do
             json.array { @members.each(&.to_json(json)) }

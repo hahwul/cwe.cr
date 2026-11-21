@@ -29,9 +29,12 @@ OUT_PATH = File.join(OUT_DIR, "weaknesses.json")
 # `cwec_v4.9.xml` sorts after `cwec_v4.20.xml` as a string, so compare the
 # version numerically.
 def newest_xml : String?
-  Dir.glob(File.join(ROOT, "data", "cwec*.xml")).max_by? do |f|
-    (File.basename(f)[/[\d.]+\d/]? || "0").split('.').map(&.to_i)
+  releases = Dir.glob(File.join(ROOT, "data", "cwec_v*.xml")).compact_map do |file|
+    version = File.basename(file)[/\Acwec_v(\d+(?:\.\d+)*)\.xml\z/, 1]? || next
+    parts = version.split('.').map(&.to_i64?)
+    {file, parts.compact} unless parts.any?(&.nil?)
   end
+  releases.max_by?(&.[1]).try(&.[0])
 end
 
 xml_path = ARGV[0]? || newest_xml || abort "no data/cwec_v*.xml found; unzip https://cwe.mitre.org/data/xml/cwec_latest.xml.zip into data/"
@@ -49,7 +52,15 @@ end
 end
 
 FileUtils.mkdir_p(OUT_DIR)
-File.write(OUT_PATH, catalog.to_json)
+staged = File.tempfile("weaknesses-", ".json", dir: OUT_DIR)
+begin
+  catalog.to_json(staged)
+  staged.close
+  File.rename(staged.path, OUT_PATH)
+ensure
+  staged.close unless staged.closed?
+  File.delete?(staged.path)
+end
 
 puts "read #{xml_path} (CWE #{catalog["catalog_version"]})"
 puts "wrote #{catalog["weakness_count"]} weaknesses, #{catalog["category_count"]} categories, #{catalog["view_count"]} views, #{catalog["external_reference_count"]} refs to #{OUT_PATH}"

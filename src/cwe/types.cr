@@ -220,6 +220,26 @@ module CWE
     end
   end
 
+  alias PhaseEntry = String | CustomPhase
+
+  # Shared ordered representation for introduction, detection and mitigation phases.
+  private module OrderedPhases
+    @[JSON::Field(key: "phaseEntries", ignore_serialize: @phase_entries.empty?)]
+    @phase_entries : Array(PhaseEntry) = [] of PhaseEntry
+
+    # Legacy records with separate custom phases do not identify their positions.
+    def phase_entries : Array(PhaseEntry)
+      return @phase_entries unless @phase_entries.empty?
+      @custom_phases.empty? ? @phases.map(&.as(PhaseEntry)) : [] of PhaseEntry
+    end
+
+    private def apply_phase_entries : Nil
+      return if @phase_entries.empty?
+      @phases = @phase_entries.map { |entry| entry.is_a?(CustomPhase) ? entry.value : entry }
+      @custom_phases = @phase_entries.compact_map(&.as?(CustomPhase))
+    end
+  end
+
   # A directed edge in the CWE hierarchy.
   #
   # `nature` is the relationship label as defined by the catalog
@@ -261,7 +281,7 @@ module CWE
 
     # The first listed `Scope` / `Impact`. MITRE's schema allows several of
     # each per consequence; `scopes` / `impacts` hold all of them, in order.
-    getter scope : String
+    getter scope : String = ""
     getter impact : String?
     getter likelihood : String?
     getter note : String?
@@ -271,7 +291,7 @@ module CWE
     @[JSON::Field(key: "consequenceId")]
     getter consequence_id : String?
 
-    def initialize(@scope, @impact = nil, @likelihood = nil, @note = nil,
+    def initialize(@scope = "", @impact = nil, @likelihood = nil, @note = nil,
                    @scopes = [] of String, @impacts = [] of String, @consequence_id = nil)
       after_initialize
     end
@@ -283,11 +303,14 @@ module CWE
       if @impacts.empty? && (i = @impact)
         @impacts = [i]
       end
+      @scope = @scopes.first? || ""
+      @impact = @impacts.first?
     end
   end
 
   struct Mitigation
     include JSON::Serializable
+    include OrderedPhases
 
     @[JSON::Field(key: "mitigationId")]
     getter mitigation_id : String?
@@ -312,7 +335,8 @@ module CWE
 
     def initialize(@mitigation_id = nil, @phase = nil, @strategy = nil,
                    @description = nil, @effectiveness = nil, @effectiveness_notes = nil,
-                   @phases = [] of String, @custom_phases = [] of CustomPhase)
+                   @phases = [] of String, @custom_phases = [] of CustomPhase,
+                   @phase_entries = [] of PhaseEntry)
       after_initialize
     end
 
@@ -320,6 +344,7 @@ module CWE
     # document supplied (`phases` wins when both are given);
     # JSON::Serializable calls this after reading.
     def after_initialize
+      apply_phase_entries
       if @phases.empty? && (p = @phase)
         @phases = [p]
       end
@@ -330,6 +355,7 @@ module CWE
 
   struct DetectionMethod
     include JSON::Serializable
+    include OrderedPhases
 
     getter method : String
 
@@ -351,11 +377,13 @@ module CWE
 
     def initialize(@method, @method_id = nil, @description = nil,
                    @effectiveness = nil, @effectiveness_notes = nil,
-                   @phases = [] of String, @custom_phases = [] of CustomPhase)
+                   @phases = [] of String, @custom_phases = [] of CustomPhase,
+                   @phase_entries = [] of PhaseEntry)
       after_initialize
     end
 
     def after_initialize
+      apply_phase_entries
       @phases = @custom_phases.map(&.value) if @phases.empty?
     end
   end
@@ -389,6 +417,7 @@ module CWE
 
   struct ModeOfIntroduction
     include JSON::Serializable
+    include OrderedPhases
 
     # The first listed phase; `phases` holds all of them. MITRE's schema 8.0
     # (CWE 5.0) allows several `<Phase>` / `<Custom_Phase>`s per introduction.
@@ -400,12 +429,13 @@ module CWE
     getter custom_phases : Array(CustomPhase) = [] of CustomPhase
 
     def initialize(@phase = "", @note = nil, @phases = [] of String,
-                   @custom_phases = [] of CustomPhase)
+                   @custom_phases = [] of CustomPhase, @phase_entries = [] of PhaseEntry)
       after_initialize
     end
 
     # See `Mitigation#after_initialize`.
     def after_initialize
+      apply_phase_entries
       @phases = [@phase] if @phases.empty? && !@phase.empty?
       @phases = @custom_phases.map(&.value) if @phases.empty?
       @phase = @phases.first? || ""
@@ -798,6 +828,7 @@ module CWE
     # before `submissions` existed carries only them, so they become the
     # single submission; JSON::Serializable calls this after reading.
     def after_initialize
+      @modifications = @modifications.select { |modification| modification.date.presence }
       if first = @submissions.first?
         @submission_date = first.date
         @submission_name = first.name

@@ -17,6 +17,17 @@ end
 
 describe CWE::Catalog do
   describe "#pillar_of" do
+    it "revisits a node when a shorter route leaves enough depth to reach a Pillar" do
+      entries = (1..34).map do |id|
+        relations = [] of CWE::Related
+        relations << CWE::Related.new("ChildOf", id + 1, 1000, "Primary") if id < 34
+        relations << CWE::Related.new("ChildOf", 33, 1000) if id == 1
+        abstraction = id == 34 ? CWE::Abstraction::Pillar : CWE::Abstraction::Class
+        CWE::Weakness.new(id, "Entry #{id}", abstraction: abstraction, related_weaknesses: relations)
+      end
+      CWE::Catalog.new("test", "", entries).pillar_of(1).try(&.id).should eq(34)
+    end
+
     # Bug: the walk merged the `ChildOf` edges of *every* view and then picked
     # whichever Pillar happened to sit last in the BFS result. MITRE places the
     # Pillar tier only in the Research view (1000) and marks one parent per
@@ -99,6 +110,30 @@ describe CWE::Catalog do
   end
 
   describe "#children_of" do
+    it "resolves ParentOf and ChildOf in both directions without duplicates" do
+      parent = CWE::Weakness.new(1, "Parent", related_weaknesses: [
+        CWE::Related.new("ParentOf", 2, 1000),
+        CWE::Related.new("ParentOf", 3, 1000),
+      ])
+      child = CWE::Weakness.new(2, "Child", related_weaknesses: [CWE::Related.new("ChildOf", 1, 1000)])
+      inverse_only = CWE::Weakness.new(3, "Inverse only")
+      cat = CWE::Catalog.new("test", "", [parent, child, inverse_only])
+      cat.children_of(1, view_id: 1000).map(&.id).should eq([2, 3])
+      cat.parents_of(2).map(&.id).should eq([1])
+      cat.parents_of(3, view_id: 1000).map(&.id).should eq([1])
+      cat.children_of(1, view_id: 1003).should be_empty
+    end
+
+    it "keeps the index consistent when callers modify relationship arrays" do
+      relations = [CWE::Related.new("ChildOf", 1, 1000)]
+      child = CWE::Weakness.new(2, "Child", related_weaknesses: relations)
+      cat = CWE::Catalog.new("test", "", [CWE::Weakness.new(1, "Parent"), child])
+      relations.clear
+      child.related_weaknesses.clear
+      cat.parents_of(2).map(&.id).should eq([1])
+      cat.children_of(1).map(&.id).should eq([2])
+    end
+
     # Bug: the children index is keyed by `ChildOf` target, and `children_of`
     # read it without checking the target exists — so a dangling edge resolved
     # in one direction (`children_of`) but not the other (`parents_of`).
@@ -118,6 +153,40 @@ describe CWE::Catalog do
   end
 
   describe ".from_json" do
+    it "skips missing or invalid targets rather than linking them to zero" do
+      cat = CWE::Catalog.from_json(<<-JSON)
+        {"weaknesses":[{"id":0},{"id":1,"related_weaknesses":[{"nature":"ChildOf","cwe_id":"bad"}],
+          "mapping_notes":{"suggestions":[{}]}}],"categories":[{"id":2,"members":[{"view_id":3}]}]}
+        JSON
+      cat.parents_of(1).should be_empty
+      cat.member_entries_of(2).should be_empty
+      cat.find!(1).mapping_notes.not_nil!.suggestions.should be_empty
+    end
+
+    it "keeps legacy example and history data when detailed rows are malformed" do
+      cat = CWE::Catalog.from_json(<<-JSON)
+        {"weaknesses":[{"id":1,"demonstrative_examples":[{"body_text":["Prose"],"example_code":[{"code":"print(1)"}],
+          "reference_ids":["REF-1"],"entries":[{}],"references":[{}]}],
+          "content_history":{"modification_count":9,"last_modification_date":"2026-10-28","modifications":[{}]}}]}
+        JSON
+      example = cat.find!(1).demonstrative_examples.first
+      example.body_text.should eq(["Prose"])
+      example.example_code.first.code.should eq("print(1)")
+      example.reference_ids.should eq(["REF-1"])
+      history = cat.find!(1).content_history.not_nil!
+      history.modification_count.should eq(9)
+      history.last_modification_date.should eq("2026-10-28")
+    end
+
+    it "keeps Category and View mapping policy prohibited with incomplete or conflicting notes" do
+      cat = CWE::Catalog.from_json(<<-JSON)
+        {"weaknesses":[],"categories":[{"id":1,"mapping_notes":{"usage":"Allowed"}}],
+          "views":[{"id":2,"mapping_notes":{}}]}
+        JSON
+      cat.category!(1).mapping_usage.should eq(CWE::MappingUsage::Prohibited)
+      cat.view!(2).mapping_usage.should eq(CWE::MappingUsage::Prohibited)
+    end
+
     it "wraps a JSON syntax error in CWE::Error" do
       # Every other failure mode is already a CWE::Error; a caller should only
       # have to rescue the one type.
@@ -184,6 +253,22 @@ describe CWE::Catalog do
   end
 
   describe "#members_of" do
+    it "resolves implicit views from the embedded XML filters" do
+      CWE.members_of(709).map(&.id).should eq([680, 690, 692])
+      CWE.member_entries_of(2000).size.should eq(CWE.size + CWE.categories.size + CWE.views.size)
+      CWE.member_entries_of(679).should be_empty
+    end
+
+    it "resolves grouping memberships declared by Member_Of" do
+      links = [CWE::Category::Member.new(10, 10)]
+      group = CWE::Category.new(11, "Grouping", members: [CWE::Category::Member.new(2, 10)], member_of: links)
+      view = CWE::View.new(10, "View")
+      cat = CWE::Catalog.new("test", "", [CWE::Weakness.new(2, "Weakness")], [group], [view])
+      links.clear
+      group.member_of.clear
+      cat.member_entries_of(10).map(&.id).should eq([11])
+      cat.members_of(10, resolve_categories: true).map(&.id).should eq([2])
+    end
     it "resolves only Weakness members, skipping nested Categories" do
       # View 699 (Software Development) is assembled entirely out of
       # Categories, so there is nothing for members_of to resolve — the raw
@@ -196,6 +281,19 @@ describe CWE::Catalog do
 
     it "returns an empty list for an id that is neither Category nor View" do
       CWE.members_of(79).should be_empty
+    end
+  end
+
+  describe "#external_reference" do
+    it "resolves bracketed citations and preserves distinct exact IDs" do
+      CWE.external_reference!("[REF-1586]").should eq(CWE.external_reference!("REF-1586"))
+      refs = [CWE::ExternalReference.new("2", title: "Numeric"),
+              CWE::ExternalReference.new("REF-2", title: "Prefixed")]
+      cat = CWE::Catalog.new("test", "", [] of CWE::Weakness, external_references: refs)
+      cat.external_reference_count.should eq(2)
+      cat.external_reference!("2").title.should eq("Numeric")
+      cat.external_reference!("[REF-2]").title.should eq("Prefixed")
+      cat.external_reference("ref_2").should be_nil
     end
   end
 

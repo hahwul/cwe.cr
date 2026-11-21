@@ -62,7 +62,10 @@ module CWE
     # at it via a `ChildOf` edge. Built once at construction so `children_of`
     # is O(children) instead of O(catalog).
     @children_index : Hash(Int32, Array(Weakness))
+    @inverse_parents : Hash(Int32, Array(Related))
+    @inverse_members : Hash(Int32, Array(Int32))
     @external_refs_by_id : Hash(String, ExternalReference)
+    @external_ref_aliases : Hash(String, ExternalReference?)
     @sorted_external_refs : Array(ExternalReference)
 
     def initialize(@catalog_version : String, @generated_at : String,
@@ -89,14 +92,29 @@ module CWE
       @sorted_views = @views_by_id.values.sort!
 
       @external_refs_by_id = {} of String => ExternalReference
-      external_references.each { |r| @external_refs_by_id[canonical_ref_id(r.reference_id)] = r }
+      external_references.each { |r| @external_refs_by_id[r.reference_id.strip] = r }
+      @external_ref_aliases = {} of String => ExternalReference?
+      @external_refs_by_id.each do |id, ref|
+        alias_id = canonical_ref_id(id)
+        @external_ref_aliases[alias_id] = @external_ref_aliases.has_key?(alias_id) ? nil : ref
+      end
       @sorted_external_refs = @external_refs_by_id.values.sort_by! { |r| ref_sort_key(r.reference_id) }
+
+      @inverse_members = Hash(Int32, Array(Int32)).new { |h, k| h[k] = [] of Int32 }
+      @sorted_categories.each { |c| c.member_of.each { |r| @inverse_members[r.cwe_id] << c.id } }
+      @sorted_views.each { |v| v.member_of.each { |r| @inverse_members[r.cwe_id] << v.id } }
+
+      @inverse_parents = Hash(Int32, Array(Related)).new { |h, k| h[k] = [] of Related }
+      @sorted.each do |parent|
+        parent.child_relations.each do |r|
+          @inverse_parents[r.cwe_id] << Related.new("ChildOf", parent.id, r.view_id, r.ordinal)
+        end
+      end
 
       @children_index = Hash(Int32, Array(Weakness)).new { |h, k| h[k] = [] of Weakness }
       @sorted.each do |w|
         seen_parents = Set(Int32).new
-        w.related_weaknesses.each do |r|
-          next unless r.nature == "ChildOf"
+        parent_relations_for(w).each do |r|
           next if seen_parents.includes?(r.cwe_id)
           seen_parents << r.cwe_id
           @children_index[r.cwe_id] << w
@@ -249,7 +267,7 @@ module CWE
         member_of: parse_members(j, "member_of"),
         notes: objects(j, "notes").map { |x| parse_note(x) },
         taxonomy_mappings: objects(j, "taxonomy_mappings").map { |x| parse_taxonomy(x) },
-        references: objects(j, "references").map { |x| parse_reference_link(x) },
+        references: objects(j, "references").compact_map { |x| parse_reference_link(x) },
         mapping_notes: object(j, "mapping_notes").try { |x| parse_mapping_notes(x) },
         content_history: object(j, "content_history").try { |x| parse_content_history(x) },
         raw_status: status_raw,
@@ -267,20 +285,22 @@ module CWE
         status: Status.parse_label(status_raw),
         objective: s(j, "objective"),
         filter: s(j, "filter"),
+        implicit_member_ids: int32s(j, "implicit_member_ids"),
         members: parse_members(j, "members"),
         member_of: parse_members(j, "member_of"),
         audience: objects(j, "audience").map { |x| parse_stakeholder(x) },
         notes: objects(j, "notes").map { |x| parse_note(x) },
-        references: objects(j, "references").map { |x| parse_reference_link(x) },
+        references: objects(j, "references").compact_map { |x| parse_reference_link(x) },
         mapping_notes: object(j, "mapping_notes").try { |x| parse_mapping_notes(x) },
         content_history: object(j, "content_history").try { |x| parse_content_history(x) },
         raw_status: status_raw,
       )
     end
 
-    private def self.parse_reference_link(x : ::JSON::Any) : ReferenceLink
+    private def self.parse_reference_link(x : ::JSON::Any) : ReferenceLink?
+      id = s(x, "external_reference_id") || return
       ReferenceLink.new(
-        external_reference_id: raw_s(x, "external_reference_id") || "",
+        external_reference_id: id,
         section: s(x, "section"),
       )
     end
@@ -300,13 +320,14 @@ module CWE
         rationale: s(j, "rationale"),
         comments: s(j, "comments"),
         reasons: strings(j, "reasons"),
-        suggestions: objects(j, "suggestions").map { |x| parse_mapping_suggestion(x) },
+        suggestions: objects(j, "suggestions").compact_map { |x| parse_mapping_suggestion(x) },
       )
     end
 
-    private def self.parse_mapping_suggestion(x : ::JSON::Any) : MappingSuggestion
+    private def self.parse_mapping_suggestion(x : ::JSON::Any) : MappingSuggestion?
+      id = i32(x, "cwe_id") || return
       MappingSuggestion.new(
-        cwe_id: i32(x, "cwe_id") || 0,
+        cwe_id: id,
         comment: s(x, "comment"),
       )
     end
@@ -361,7 +382,7 @@ module CWE
         reference_ids: strings(j, "reference_ids"),
         example_id: s(j, "example_id"),
         title_text: s(j, "title_text"),
-        references: objects(j, "references").map { |x| parse_reference_link(x) },
+        references: objects(j, "references").compact_map { |x| parse_reference_link(x) },
         entries: parse_example_entries(j),
       )
     end
@@ -370,7 +391,7 @@ module CWE
       rows = field(j, "entries").try(&.as_a?) || return [] of String | ExampleCode
       rows.compact_map do |row|
         if row.as_h?
-          parse_example_code(row)
+          parse_example_code(row) if s(row, "code")
         else
           row.as_s?.presence
         end
@@ -386,9 +407,10 @@ module CWE
     end
 
     private def self.parse_members(j : ::JSON::Any, key : String) : Array(Category::Member)
-      objects(j, key).map do |m|
+      objects(j, key).compact_map do |m|
+        id = i32(m, "cwe_id") || next
         Category::Member.new(
-          cwe_id: i32(m, "cwe_id") || 0,
+          cwe_id: id,
           view_id: i32(m, "view_id") || 0,
           dimensions: parse_dimensions(m),
           note: s(m, "note"),
@@ -416,7 +438,7 @@ module CWE
         dimensions: parse_dimensions(j),
         diagram: s(j, "diagram"),
         likelihood_of_exploit: raw_s(j, "likelihood_of_exploit"),
-        related_weaknesses: objects(j, "related_weaknesses").map { |x| parse_related(x) },
+        related_weaknesses: objects(j, "related_weaknesses").compact_map { |x| parse_related(x) },
         ordinalities: objects(j, "ordinalities").map { |x| parse_ordinality(x) },
         applicable_platforms: objects(j, "applicable_platforms").compact_map { |x| parse_platform(x) },
         alternate_terms: objects(j, "alternate_terms").map { |x| parse_alt_term(x) },
@@ -433,7 +455,7 @@ module CWE
         functional_areas: strings(j, "functional_areas"),
         affected_resources: strings(j, "affected_resources"),
         exploitation_factors: strings(j, "exploitation_factors"),
-        references: objects(j, "references").map { |x| parse_reference_link(x) },
+        references: objects(j, "references").compact_map { |x| parse_reference_link(x) },
         mapping_notes: object(j, "mapping_notes").try { |x| parse_mapping_notes(x) },
         content_history: object(j, "content_history").try { |x| parse_content_history(x) },
         raw_abstraction: abs_raw,
@@ -442,10 +464,12 @@ module CWE
       )
     end
 
-    private def self.parse_related(x : ::JSON::Any) : Related
+    private def self.parse_related(x : ::JSON::Any) : Related?
+      id = i32(x, "cwe_id") || return
+      nature = s(x, "nature") || return
       Related.new(
-        nature: raw_s(x, "nature") || "",
-        cwe_id: i32(x, "cwe_id") || 0,
+        nature: nature,
+        cwe_id: id,
         view_id: i32(x, "view_id") || 0,
         ordinal: s(x, "ordinal"),
         chain_id: s(x, "chain_id"),
@@ -463,10 +487,19 @@ module CWE
     end
 
     private def self.parse_custom_phases(j : ::JSON::Any) : Array(CustomPhase)
-      objects(j, "custom_phases").compact_map do |x|
-        domain = s(x, "domain") || next
-        value = s(x, "value") || next
-        CustomPhase.new(domain, value)
+      objects(j, "custom_phases").compact_map { |row| parse_custom_phase(row) }
+    end
+
+    private def self.parse_custom_phase(row : ::JSON::Any) : CustomPhase?
+      domain = s(row, "domain") || return
+      value = s(row, "value") || return
+      CustomPhase.new(domain, value)
+    end
+
+    private def self.parse_phase_entries(j : ::JSON::Any) : Array(PhaseEntry)
+      rows = field(j, "phase_entries").try(&.as_a?) || return [] of PhaseEntry
+      rows.compact_map do |row|
+        row.as_s?.presence || parse_custom_phase(row)
       end
     end
 
@@ -520,6 +553,7 @@ module CWE
         note: s(x, "note"),
         phases: strings(x, "phases"),
         custom_phases: parse_custom_phases(x),
+        phase_entries: parse_phase_entries(x),
       )
     end
 
@@ -548,6 +582,7 @@ module CWE
         effectiveness_notes: s(x, "effectiveness_notes"),
         phases: strings(x, "phases"),
         custom_phases: parse_custom_phases(x),
+        phase_entries: parse_phase_entries(x),
       )
     end
 
@@ -557,6 +592,7 @@ module CWE
         phase: s(x, "phase"),
         phases: strings(x, "phases"),
         custom_phases: parse_custom_phases(x),
+        phase_entries: parse_phase_entries(x),
         strategy: s(x, "strategy"),
         description: s(x, "description"),
         effectiveness: s(x, "effectiveness"),
@@ -765,7 +801,7 @@ module CWE
     # parks anything that isn't a numbered citation at the end.
     private def ref_sort_key(id : String) : {Int32, String}
       if (md = /\AREF-(\d+)\z/.match(canonical_ref_id(id))) && (n = md[1].to_i?)
-        {n, ""}
+        {n, id}
       else
         {Int32::MAX, id}
       end
@@ -777,11 +813,18 @@ module CWE
       @sorted_external_refs.dup
     end
 
-    # Resolve a `Reference_ID` such as `"REF-2"` to its full citation. Returns
-    # nil if the id is not in the registry. The `REF-` prefix is optional and
-    # case-insensitive, so `"REF-2"`, `"ref-2"` and `"2"` are equivalent.
+    # Resolve a `Reference_ID` such as `"REF-2"` to its full citation.
+    # Exact IDs take precedence. Bracketed IDs and case-insensitive numeric aliases
+    # also resolve when they identify one citation.
     def external_reference(id : String) : ExternalReference?
-      @external_refs_by_id[canonical_ref_id(id)]?
+      id = id.strip
+      if ref = @external_refs_by_id[id]?
+        return ref
+      end
+      if id.starts_with?('[') && id.ends_with?(']')
+        id = id[1...-1].strip
+      end
+      @external_refs_by_id[id]? || @external_ref_aliases[canonical_ref_id(id)]?
     end
 
     def external_reference!(id : String) : ExternalReference
@@ -806,8 +849,8 @@ module CWE
       find(id) || category(id) || view(id)
     end
 
-    # Direct members of a Category or View exactly as its `Has_Member`s list
-    # them, resolved to whichever kind each id is. Most Graph views (699,
+    # Direct members of a Category or View, including implicit filters and
+    # memberships declared from the member side. Most Graph views (699,
     # 700, 1400, the OWASP / CERT / SFP views, ...) are made of Categories
     # rather than Weaknesses, so this is their real top level. Ids not in
     # the catalog are skipped; `Category#members` / `View#members` keep the
@@ -840,7 +883,7 @@ module CWE
           if w = find(m)
             found << w
           elsif cat = category(m)
-            queue << cat.member_ids
+            queue << member_ids_of(cat.id)
           end
         end
       end
@@ -853,7 +896,13 @@ module CWE
     end
 
     private def member_ids_of(id : Int) : Array(Int32)
-      (category(id) || view(id)).try(&.member_ids) || [] of Int32
+      entry = category(id) || view(id) || return [] of Int32
+      ids = entry.member_ids
+      ids.concat(entry.implicit_member_ids) if entry.is_a?(View)
+      if members = @inverse_members[entry.id]?
+        ids.concat(members)
+      end
+      ids.uniq!
     end
 
     # ---------- Filters ----------
@@ -868,13 +917,13 @@ module CWE
 
     # ---------- Relationships ----------
 
-    # Direct parents of `id` per the catalog's `ChildOf` edges. When
+    # Direct parents of `id` per `ChildOf` and inverse `ParentOf` edges. When
     # `view_id` is given, only edges declared in that CWE view are returned
     # (CWE catalog records the same parent twice when it appears in multiple
     # views — view 1000 vs 1003 most commonly).
     def parents_of(id : Int, view_id : Int? = nil) : Array(Weakness)
       w = find(id) || return [] of Weakness
-      rels = w.parent_relations
+      rels = parent_relations_for(w)
       if v = view_id
         vid = narrow_id(v) || return [] of Weakness
         rels = rels.select { |r| r.view_id == vid }
@@ -908,7 +957,7 @@ module CWE
       if v = view_id
         vid = narrow_id(v) || return [] of Weakness
         return kids.select do |w|
-          w.parent_relations.any? { |r| r.cwe_id == target && r.view_id == vid }
+          parent_relations_for(w).any? { |r| r.cwe_id == target && r.view_id == vid }
         end
       end
       kids.dup
@@ -986,21 +1035,22 @@ module CWE
       return w if w.abstraction == Abstraction::Pillar
       # `reject` matters only for a cyclic document, where the walk can come
       # back around to the entry itself — which is not one of its ancestors.
-      pillar_from(w, Set(Int32){w.id}, 1) ||
+      pillar_from(w, {w.id => 0}, 1) ||
         ancestors_of(id).reject! { |a| a.id == w.id }.last?
     end
 
     # Depth-first search for the nearest `Pillar` along `ranked_parent_relations`
-    # order, sharing `seen` across branches so a diamond in the graph is visited
-    # once and a cycle terminates. `max_depth` mirrors the guard on
+    # order. Revisit a node only when a shorter path gives it more depth
+    # to explore. `max_depth` mirrors the guard on
     # `ancestors_of`; the real CWE hierarchy is 3-5 levels deep.
-    private def pillar_from(w : Weakness, seen : Set(Int32), depth : Int32,
+    private def pillar_from(w : Weakness, seen : Hash(Int32, Int32), depth : Int32,
                             max_depth : Int32 = 32) : Weakness?
       return if depth > max_depth
       ranked_parent_relations(w).each do |r|
         parent = find(r.cwe_id)
-        next if parent.nil? || seen.includes?(parent.id)
-        seen << parent.id
+        next unless parent
+        next if (previous_depth = seen[parent.id]?) && previous_depth <= depth
+        seen[parent.id] = depth
         return parent if parent.abstraction == Abstraction::Pillar
         if found = pillar_from(parent, seen, depth + 1, max_depth)
           return found
@@ -1012,11 +1062,19 @@ module CWE
     # `ChildOf` edges of `w`, most authoritative first. Ties keep the order the
     # catalog declared them in, so the walk is deterministic.
     private def ranked_parent_relations(w : Weakness) : Array(Related)
-      research, other = w.parent_relations.partition { |r| r.view_id == RESEARCH_VIEW_ID }
+      research, other = parent_relations_for(w).partition { |r| r.view_id == RESEARCH_VIEW_ID }
       ordered = research.select(&.primary?)
       ordered.concat(research.reject(&.primary?))
       ordered.concat(other.select(&.primary?))
       ordered.concat(other.reject(&.primary?))
+    end
+
+    private def parent_relations_for(w : Weakness) : Array(Related)
+      relations = w.parent_relations
+      if inverse = @inverse_parents[w.id]?
+        relations.concat(inverse)
+      end
+      relations
     end
 
     def pillar_of(id : String) : Weakness?

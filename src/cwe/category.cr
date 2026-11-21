@@ -13,8 +13,7 @@ module CWE
     getter status : Status
     getter summary : String?
     getter members : Array(Member)
-    # Explicit `<Member_Of>` relationships declared by this entry.
-    getter member_of : Array(Member)
+    @member_of : Array(Member)
     getter notes : Array(Note)
     getter taxonomy_mappings : Array(TaxonomyMapping)
     getter references : Array(ReferenceLink)
@@ -31,10 +30,16 @@ module CWE
                    @content_history = nil,
                    @raw_status = nil,
                    @member_of = [] of Member)
+      @member_of = @member_of.dup
+    end
+
+    # Explicit `<Member_Of>` relationships declared by this entry.
+    def member_of : Array(Member)
+      @member_of.dup
     end
 
     def mapping_usage : MappingUsage
-      @mapping_notes.try(&.usage) || MappingUsage::Prohibited
+      MappingUsage::Prohibited
     end
 
     def mappable? : Bool
@@ -113,9 +118,9 @@ module CWE
     getter status : Status
     getter objective : String?
     getter filter : String?
+    getter implicit_member_ids : Array(Int32)
     getter members : Array(Category::Member)
-    # Explicit `<Member_Of>` relationships declared by this view.
-    getter member_of : Array(Category::Member)
+    @member_of : Array(Category::Member)
     getter audience : Array(Stakeholder)
     getter notes : Array(Note)
     getter references : Array(ReferenceLink)
@@ -132,11 +137,18 @@ module CWE
                    @mapping_notes = nil,
                    @content_history = nil,
                    @raw_status = nil,
-                   @member_of = [] of Category::Member)
+                   @member_of = [] of Category::Member,
+                   @implicit_member_ids = [] of Int32)
+      @member_of = @member_of.dup
+    end
+
+    # Explicit `<Member_Of>` relationships declared by this view.
+    def member_of : Array(Category::Member)
+      @member_of.dup
     end
 
     def mapping_usage : MappingUsage
-      @mapping_notes.try(&.usage) || MappingUsage::Prohibited
+      MappingUsage::Prohibited
     end
 
     def mappable? : Bool

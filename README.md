@@ -80,7 +80,8 @@ Each `CWE::Weakness` exposes:
 
 Related weaknesses and membership links expose their own `dimensions`.
 Introductions, detections, and mitigations expose `custom_phases` with the
-domain and value alongside the labels in `phases`. Alternate terms expose
+domain and value alongside the labels in `phases`. Use `phase_entries` for the
+ordered sequence of standard labels and domain-specific phases. Alternate terms expose
 `roles`, and notes can carry `version` and `release_date`.
 
 Convenience helpers:
@@ -131,7 +132,8 @@ CWE stores all citations once in a catalog-level registry; individual
 entries link to them by id.
 
 References can also provide an alternate URL, media types, access
-restrictions, and rationales.
+restrictions, and rationales. Lookups accept bracketed IDs from observed
+examples, such as `[REF-1586]`.
 
 ```crystal
 w = CWE.find!(79)
@@ -162,8 +164,8 @@ CWE.ancestors_of("CWE-79")
 CWE.descendants_of("CWE-79", max_depth: 1)
 ```
 
-`parents_of` / `ancestors_of` follow every `ChildOf` edge unless you filter
-them with `view_id`. `pillar_of` is different: MITRE places the `Pillar` tier
+`parents_of` / `ancestors_of` follow `ChildOf` and inverse `ParentOf` edges
+unless you filter them with `view_id`. MITRE places the `Pillar` tier
 only in the Research view, so the walk prefers view-1000 edges over edges
 borrowed from another view, and MITRE's `Primary` ordinal over the secondary
 parents. That is what makes `CWE.pillar_of(15)` answer `CWE-664` rather than
@@ -203,11 +205,14 @@ Categories (informal groupings, "Mapping Prohibited") and Views (slices of
 the catalog organised around a stakeholder's perspective).
 
 Both expose explicit `Member_Of` links through `member_of`.
+Catalog membership queries include those links and the results of implicit
+view filters evaluated when the XML catalog is generated.
 
 ```crystal
 CWE.category!(227)  # => CWE::Category: "7PK - API Abuse" (10 members)
 CWE.view!(1000)     # => CWE::View: "Complete Weakness Hierarchy" (Graph)
 CWE.members_of(1000) # => Array(CWE::Weakness) — the member Weaknesses
+CWE.members_of(709).map(&.id) # => [680, 690, 692], resolved by the Named Chains filter
 
 # Deprecated entries stay in the catalog so old ids still resolve (28
 # Weaknesses, 35 Categories and 4 Views in CWE 5.0); all three expose the
