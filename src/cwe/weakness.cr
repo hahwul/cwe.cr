@@ -28,6 +28,8 @@ module CWE
     # `<Technical_Nuance>`, added in CWE 5.0. Much of what earlier releases
     # kept in `extended_description` now lives here.
     getter technical_nuance : String?
+    getter dimensions : Array(Dimension)
+    getter diagram : String?
 
     getter related_weaknesses : Array(Related)
     getter ordinalities : Array(Ordinality)
@@ -90,6 +92,8 @@ module CWE
       @raw_status : String? = nil,
       @raw_structure : String? = nil,
       @technical_nuance : String? = nil,
+      @dimensions : Array(Dimension) = [] of Dimension,
+      @diagram : String? = nil,
     )
     end
 

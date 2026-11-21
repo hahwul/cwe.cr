@@ -21,7 +21,10 @@ jobs:
         with:
           crystal: ${{ matrix.crystal }}
       - name: Install dependencies
-        run: shards install
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-dev
+          shards install
       - name: Check formatting
         run: crystal tool format --check
       - name: Run tests

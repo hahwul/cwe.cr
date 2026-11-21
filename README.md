@@ -59,6 +59,8 @@ Each `CWE::Weakness` exposes:
 | `status` | `CWE::Status` (`Stable`, `Draft`, `Incomplete`, `Deprecated`, …) |
 | `description`, `extended_description` | `String?` |
 | `technical_nuance` | `String?` — CWE 5.0's home for much of the old extended description |
+| `dimensions` | `Array(CWE::Dimension)` with type and value |
+| `diagram` | `String?` with the diagram path on MITRE's site |
 | `likelihood_of_exploit` | `String?` |
 | `related_weaknesses` | `Array(CWE::Related)` — `ChildOf` / `PeerOf` / `CanPrecede` / `CanAlsoBe` / `Requires` / `StartsWith` / `Overlaps` |
 | `common_consequences` | `Array(CWE::Consequence)` — scopes + impacts + note |
@@ -73,8 +75,13 @@ Each `CWE::Weakness` exposes:
 | `related_attack_patterns` | `Array(Int32)` — CAPEC ids |
 | `references` | `Array(CWE::ReferenceLink)` — `REF-N` citations |
 | `mapping_notes` | `CWE::MappingNotes?` — usage policy + rationale |
-| `content_history` | `CWE::ContentHistory?` — submissions (all of them, `submissions`) / last-modification date |
+| `content_history` | `CWE::ContentHistory?` with submissions, contributions, modifications, and previous names |
 | `notes` | `Array(CWE::Note)` |
+
+Related weaknesses and membership links expose their own `dimensions`.
+Introductions, detections, and mitigations expose `custom_phases` with the
+domain and value alongside the labels in `phases`. Alternate terms expose
+`roles`, and notes can carry `version` and `release_date`.
 
 Convenience helpers:
 
@@ -101,6 +108,8 @@ CWE.category!(227).mapping_usage    # => CWE::MappingUsage::Prohibited
 
 ### Demonstrative examples
 
+The `entries` accessor preserves the order of prose and code blocks.
+
 Not every example carries code — some are prose only — so pick the ones
 that do:
 
@@ -120,6 +129,9 @@ w.demonstrative_examples.flat_map(&.example_code).select(&.nature.== "Bad")
 
 CWE stores all citations once in a catalog-level registry; individual
 entries link to them by id.
+
+References can also provide an alternate URL, media types, access
+restrictions, and rationales.
 
 ```crystal
 w = CWE.find!(79)
@@ -190,6 +202,8 @@ CWE.find!(79).to_json
 Categories (informal groupings, "Mapping Prohibited") and Views (slices of
 the catalog organised around a stakeholder's perspective).
 
+Both expose explicit `Member_Of` links through `member_of`.
+
 ```crystal
 CWE.category!(227)  # => CWE::Category: "7PK - API Abuse" (10 members)
 CWE.view!(1000)     # => CWE::View: "Complete Weakness Hierarchy" (Graph)
@@ -220,6 +234,7 @@ CWE.entry(99999) # => nil
 
 ```crystal
 CWE.catalog_version           # => "5.0"
+CWE.catalog.catalog_date      # => "2026-10-28"
 CWE.size                      # => 984  (weaknesses, 28 of them deprecated)
 CWE.categories.size           # => 431  (MITRE's `<Grouping>`s since CWE 5.0)
 CWE.views.size                # => 62
@@ -241,6 +256,9 @@ crystal run examples/basic.cr
 ```
 
 ## Development
+
+Install the libxml2 development package to run the XML parser specs and
+regenerate the catalog.
 
 Run the test suite:
 
